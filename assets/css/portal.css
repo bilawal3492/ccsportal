@@ -1,0 +1,97 @@
+/* Centre CCS Portal — front-end app styles. Scoped under .ccsp-portal. */
+.ccsp-portal {
+	--ccsp-accent: #cf6a26;
+	--ink: #16191f; --ink-2: #3b4048; --muted: #6a7078; --faint: #99a0aa;
+	--bg: #f5f6f8; --surface: #fff; --line: #e4e6ec; --sunken: #eef0f4;
+	--good: #0f7a5f; --good-soft: #e6f4ee;
+	--radius: 14px; --shadow: 0 1px 2px rgba(16,20,28,.04), 0 10px 30px rgba(16,20,28,.06);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+	color: var(--ink); box-sizing: border-box; -webkit-font-smoothing: antialiased;
+}
+.ccsp-portal *, .ccsp-portal *::before, .ccsp-portal *::after { box-sizing: border-box; }
+
+/* Gate */
+.ccsp-gate { display: grid; place-items: center; min-height: 50vh; padding: 40px 16px; }
+.ccsp-gate-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px; max-width: 420px; text-align: center; }
+.ccsp-gate-card h2 { margin: 0 0 8px; font-size: 20px; }
+.ccsp-gate-card p { color: var(--muted); margin: 0 0 16px; }
+
+/* App bar */
+.ccsp-appbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+	background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.ccsp-brandmark { display: flex; align-items: center; gap: 12px; }
+.ccsp-logo { width: 34px; height: 34px; border-radius: 10px; background: var(--ccsp-accent); display: block; flex-shrink: 0; }
+.ccsp-brandmark strong { display: block; font-size: 16px; letter-spacing: -.01em; }
+.ccsp-brandmark span { display: block; font-size: 12px; color: var(--muted); }
+.ccsp-centre-picker { display: flex; flex-direction: column; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; gap: 4px; }
+.ccsp-centre-picker select { min-width: 240px; }
+
+/* Panels */
+.ccsp-panels { display: grid; grid-template-columns: 1fr 1.25fr .9fr; gap: 14px; align-items: start; }
+@media (max-width: 1000px) { .ccsp-panels { grid-template-columns: 1fr 1fr; } .ccsp-summary { grid-column: 1 / -1; } }
+@media (max-width: 680px) { .ccsp-panels { grid-template-columns: 1fr; } }
+.ccsp-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
+.ccsp-panel-h { margin: 0 0 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); font-weight: 800; }
+.ccsp-panel-h.mt { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+
+/* Fields */
+.ccsp-portal .fld { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 12px; }
+.ccsp-portal .fld-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ccsp-portal input, .ccsp-portal select {
+	width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; background: #fff; color: var(--ink);
+	font-family: inherit; transition: border-color .12s, box-shadow .12s;
+}
+.ccsp-portal input:focus, .ccsp-portal select:focus { outline: none; border-color: var(--ccsp-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ccsp-accent) 18%, transparent); }
+.ccsp-toggle { flex-direction: row; align-items: center; justify-content: space-between; }
+.ccsp-toggle input { width: auto; }
+.hidden { display: none !important; }
+.ccsp-hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; min-height: 16px; }
+.ccsp-promo-terms { margin-top: 8px; font-size: 12px; }
+.ccsp-promo-terms summary { cursor: pointer; font-weight: 700; color: var(--ink-2); }
+.ccsp-promo-terms #promo-terms { margin-top: 8px; padding: 10px 12px; background: var(--sunken); border-radius: 9px; color: var(--muted); white-space: pre-line; line-height: 1.5; max-height: 220px; overflow-y: auto; }
+
+/* Children */
+.ccsp-child { border: 1px solid var(--line); border-radius: 11px; padding: 13px; margin-bottom: 10px; background: #fcfcfd; }
+.ccsp-child-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.ccsp-child-head strong { font-size: 13.5px; }
+.ccsp-remove { border: none; background: #f4d9d3; color: #b02a1a; width: 24px; height: 24px; border-radius: 7px; cursor: pointer; font-size: 16px; line-height: 1; }
+.ccsp-add { width: 100%; padding: 10px; border: 1px dashed var(--line); background: var(--sunken); color: var(--ink-2); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.ccsp-add:hover { border-color: var(--ccsp-accent); color: var(--ccsp-accent); }
+
+/* Summary */
+.ccsp-summary { position: sticky; top: 16px; }
+.ccsp-sum-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.ccsp-sum-head > span { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); font-weight: 800; }
+.ccsp-period { width: auto !important; padding: 5px 8px !important; font-size: 12px !important; }
+.ccsp-figure { display: flex; align-items: baseline; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.ccsp-figure .lab { font-size: 13px; color: var(--muted); }
+.ccsp-figure .val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ccsp-figure.good .val { color: var(--good); }
+.ccsp-figure.promo .val { color: var(--ccsp-accent); }
+.ccsp-figure.total { border-bottom: none; margin-top: 4px; padding-top: 14px; }
+.ccsp-figure.total .lab { font-weight: 700; color: var(--ink); font-size: 14px; }
+.ccsp-figure.total .val { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+
+.ccsp-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.ccsp-chips .chip { font-size: 11.5px; color: var(--muted); background: var(--sunken); border-radius: 20px; padding: 4px 11px; }
+.ccsp-chips .chip b { color: var(--ink); }
+
+.ccsp-breakdown { margin: 8px 0 16px; }
+.ccsp-breakdown summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.ccsp-bd-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); padding: 7px 0; border-bottom: 1px dashed var(--line); }
+.ccsp-bd-row em { font-style: normal; color: var(--ccsp-accent); font-weight: 700; }
+
+.ccsp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ccsp-btn { padding: 10px; border: 1px solid var(--line); background: #fff; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; color: var(--ink-2); }
+.ccsp-btn.primary { grid-column: 1 / -1; background: var(--ccsp-accent); border-color: var(--ccsp-accent); color: #fff; }
+.ccsp-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ccsp-savemsg { font-size: 12px; color: var(--good); margin: 8px 0 0; min-height: 15px; }
+.ccsp-disclaimer { font-size: 11px; color: var(--faint); margin: 12px 0 0; line-height: 1.5; }
+
+/* Dark theme (respect the site if it opts in) */
+@media (prefers-color-scheme: dark) {
+	.ccsp-portal { --ink: #eef1f5; --ink-2: #c3c9d2; --muted: #98a1ad; --faint: #6b7480;
+		--bg: #0e1014; --surface: #161a20; --line: #262c35; --sunken: #12161c; --good: #3cb894; }
+	.ccsp-portal input, .ccsp-portal select { background: #0f1319; }
+	.ccsp-child { background: #12161c; }
+}

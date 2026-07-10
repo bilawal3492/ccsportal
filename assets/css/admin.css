@@ -1,0 +1,60 @@
+/* Centre CCS Portal — admin styles */
+.ccsp-wrap { max-width: 1080px; }
+.ccsp-title { display: flex; align-items: baseline; gap: 10px; }
+.ccsp-ver { font-size: 12px; font-weight: 600; color: #6a7078; background: #eef0f4; padding: 2px 8px; border-radius: 20px; }
+.ccsp-sub { color: #6a7078; font-size: 14px; max-width: 70ch; margin: 4px 0 22px; }
+
+.ccsp-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 0 0 26px; }
+@media (max-width: 782px) { .ccsp-stats { grid-template-columns: repeat(2, 1fr); } }
+.ccsp-stat { background: #fff; border: 1px solid #e2e4e9; border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(16,20,28,.04); }
+.ccsp-stat .n { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: #1d2125; line-height: 1; }
+.ccsp-stat .l { display: block; margin-top: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #7a828c; font-weight: 700; }
+
+.ccsp-status td { padding: 12px 14px; vertical-align: middle; }
+.ccsp-status td:first-child { font-weight: 600; width: 220px; }
+.ccsp-status code { background: #f2f3f6; padding: 2px 7px; border-radius: 6px; font-size: 12px; }
+
+.ccsp-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+.ccsp-badge.ok { background: #e2f3ee; color: #0f7a5f; }
+.ccsp-badge.bad { background: #fbe6e2; color: #c23c26; }
+
+.ccsp-roadmap { counter-reset: ph; list-style: none; margin: 8px 0; padding: 0; max-width: 760px; }
+.ccsp-roadmap li { position: relative; padding: 12px 16px 12px 46px; border: 1px solid #e2e4e9; border-radius: 10px; margin-bottom: 8px; background: #fff; color: #3b4048; font-size: 13.5px; }
+.ccsp-roadmap li::before { counter-increment: ph; content: counter(ph); position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 7px; background: #eef0f4; color: #6a7078; font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+.ccsp-roadmap li.done { border-color: #b8e0d3; background: #f3faf7; }
+.ccsp-roadmap li.done::before { background: #0f7a5f; color: #fff; content: "\2713"; }
+
+.ccsp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ccsp-table th.num { text-align: right; }
+.ccsp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+.ccsp-note { margin-top: 16px; padding: 12px 16px; background: #f7f8fa; border-left: 3px solid #cf6a26; border-radius: 0 8px 8px 0; font-size: 13px; color: #3b4048; max-width: 760px; }
+
+/* Cards & forms */
+.ccsp-card { background: #fff; border: 1px solid #e2e4e9; border-radius: 12px; padding: 18px 22px; margin: 0 0 18px; box-shadow: 0 1px 2px rgba(16,20,28,.04); max-width: 900px; }
+.ccsp-card h2 { margin: 0 0 14px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.ccsp-hint { color: #7a828c; font-size: 12.5px; margin: -6px 0 12px; }
+.ccsp-muted { color: #7a828c; font-size: 12px; }
+
+.ccsp-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.ccsp-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 18px; }
+@media (max-width: 640px) { .ccsp-grid2, .ccsp-grid3 { grid-template-columns: 1fr; } }
+.ccsp-grid2 label, .ccsp-grid3 label, .ccsp-block { display: flex; flex-direction: column; font-weight: 600; font-size: 12.5px; color: #3b4048; gap: 5px; }
+.ccsp-grid2 label.wide { grid-column: 1 / -1; }
+.ccsp-form input[type=text], .ccsp-form input[type=email], .ccsp-form input[type=url], .ccsp-form input[type=number], .ccsp-form input[type=date],
+.ccsp-form select, .ccsp-form textarea, .ccsp-block select, .ccsp-block input { width: 100%; }
+.ccsp-block { margin: 0 0 14px; }
+.ccsp-block.ccsp-block select { max-width: 100%; }
+/* Checkboxes/radios must never stretch to full width from the rules above. */
+.ccsp-wrap input[type=checkbox], .ccsp-wrap input[type=radio] { width: auto !important; }
+label.ccsp-check { flex-direction: row; align-items: center; gap: 8px; font-weight: 500; padding: 3px 0; }
+label.ccsp-check.inline { display: inline-flex; margin-right: 12px; }
+.ccsp-scroll { max-height: 240px; overflow-y: auto; border: 1px solid #e2e4e9; border-radius: 8px; padding: 8px 12px; background: #fbfbfc; }
+.ccsp-danger { color: #b02a1a !important; border-color: #e6b5ad !important; }
+
+/* Managers layout */
+.ccsp-grid-managers { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .ccsp-grid-managers { grid-template-columns: 1fr; } }
+.ccsp-manager-row { display: grid; grid-template-columns: 160px 1fr auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #eef0f4; }
+.ccsp-manager-row:first-of-type { border-top: none; }
+.ccsp-manager-centres { display: flex; flex-wrap: wrap; }
+.ccsp-audit-detail { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: #6a7078; }
