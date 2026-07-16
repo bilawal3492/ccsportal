@@ -37,6 +37,16 @@ class CentresController {
 
     private function render_list() {
         $rows = Repo::centres();
+        // Scope to the manager's own centres, matching what the REST layer
+        // enforces via Repo::can_access_centre(). Filtered here rather than
+        // through Repo::accessible_centres() so that admins (ids === null)
+        // keep seeing inactive centres, which the Status column reports on.
+        $ids = Repo::user_centre_ids();
+        if ($ids !== null) {
+            $rows = array_values(array_filter($rows, function ($c) use ($ids) {
+                return in_array((int) $c->id, $ids, true);
+            }));
+        }
         $can_edit = current_user_can(self::CAP_EDIT);
         ?>
         <div class="wrap ccsp-wrap">

@@ -91,7 +91,9 @@ class Auth {
             $data['display_name'] = $name;
         }
 
-        $email = sanitize_email($req->get_param('email'));
+        // Cast: the password form posts no email field, and sanitize_email(null)
+        // is deprecated on PHP 8.1+.
+        $email = sanitize_email((string) $req->get_param('email'));
         if ($email !== '' && $email !== $user->user_email) {
             if (!is_email($email)) {
                 return new WP_Error('ccsp_email', 'Please enter a valid email.', ['status' => 400]);

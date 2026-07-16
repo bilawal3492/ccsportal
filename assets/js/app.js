@@ -727,7 +727,10 @@
 			setBusy(true);
 			api('account', { method: 'POST', body: { current_password: cur, new_password: np } }).then(function (r) {
 				setBusy(false);
-				if (r.ok && r.body.ok) { setMsg('Password changed.'); setCur(''); setNp(''); setCp(''); } else { setErr((r.body && r.body.message) || 'Could not change password.'); }
+				// Changing the password rotates the session token, which invalidates
+				// the REST nonce this page was rendered with. Reload for a fresh one,
+				// as login and logout do — without it every later call 403s.
+				if (r.ok && r.body.ok) { setMsg('Password changed. Reloading…'); setCur(''); setNp(''); setCp(''); window.setTimeout(function () { window.location.reload(); }, 1200); } else { setErr((r.body && r.body.message) || 'Could not change password.'); }
 			});
 		}
 		return html`<div style=${{ maxWidth: '600px' }}>

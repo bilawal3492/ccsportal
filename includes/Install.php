@@ -51,10 +51,16 @@ class Install {
 
     /** Activation entry point. */
     public static function activate() {
+        $prev = get_option('ccsp_db_version'); // false on a fresh install.
         self::create_tables();
         self::add_roles();
         self::seed_data();
-        self::sync_centre_names();
+        // Legacy repair only. v1 seeded placeholder centre names; every seed
+        // since writes the real suburb, so running this on a current install
+        // would only overwrite names an admin has since edited.
+        if ($prev === '1') {
+            self::sync_centre_names();
+        }
         self::ensure_portal_page();
         update_option('ccsp_db_version', CCSP_DB_VERSION);
         update_option('ccsp_activated_at', current_time('mysql'));
@@ -118,18 +124,24 @@ class Install {
 
     /** Run migrations when the plugin file is updated in place. */
     public static function maybe_upgrade() {
-        if (get_option('ccsp_db_version') !== CCSP_DB_VERSION) {
+        $prev = get_option('ccsp_db_version');
+        if ($prev !== CCSP_DB_VERSION) {
             self::create_tables();
             self::add_roles();
-            self::sync_centre_names();
+            if ($prev === '1') {
+                self::sync_centre_names();
+            }
             self::ensure_portal_page();
             update_option('ccsp_db_version', CCSP_DB_VERSION);
         }
     }
 
     /**
-     * Correct the seeded placeholder centre names to their real suburbs.
-     * Idempotent — safe to run repeatedly and only overwrites the codes listed.
+     * Correct the v1 placeholder centre names to their real suburbs.
+     *
+     * Only for upgrades from db_version 1 — call sites must gate on that.
+     * It overwrites `name` by `code`, so running it on a current install
+     * silently reverts any centre an admin has renamed.
      */
     public static function sync_centre_names() {
         global $wpdb;
