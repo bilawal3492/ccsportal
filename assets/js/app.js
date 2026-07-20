@@ -1,6 +1,6 @@
-/* Centre CCS Portal — standalone React admin (React 18 + htm, no build step).
+/* Centre CCS Portal: standalone React admin (React 18 + htm, no build step).
  * Managers: Dashboard + Saved estimates (scoped).
- * Super admins: also Centres & fees, Promotions, Brands, Users — full CRUD.
+ * Super admins: also Centres & fees, Promotions, Brands, Users, full CRUD.
  * All data via the WordPress REST API, scoped server-side by role. */
 (function () {
 	'use strict';
@@ -11,6 +11,8 @@
 	var useState = React.useState, useEffect = React.useEffect, useCallback = React.useCallback;
 
 	function money(n) { return '$' + (Math.round((n || 0) * 100) / 100).toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+	/** Today's date as YYYY-MM-DD (local time), used to cap DOB inputs so no future dates. */
+	function todayISO() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
 	function api(path, opts) {
 		opts = opts || {};
 		return fetch(CFG.root + path, {
@@ -40,13 +42,13 @@
 
 	/* ---------------- Form primitives ---------------- */
 	function Text(p) {
-		return html`<label class=${'f' + (p.wide ? ' wide' : '')}><span>${p.label}</span>
+		return html`<label class=${'f' + (p.wide ? ' wide' : '')}><span>${p.label}${p.req ? html`<i class="req">*</i>` : null}</span>
 			<input type=${p.type || 'text'} value=${p.value == null ? '' : p.value} placeholder=${p.placeholder || ''}
 				min=${p.min} max=${p.max} step=${p.step} readOnly=${p.readOnly}
 				onInput=${function (e) { p.onChange(e.target.value); }} /></label>`;
 	}
 	function Sel(p) {
-		return html`<label class=${'f' + (p.wide ? ' wide' : '')}><span>${p.label}</span>
+		return html`<label class=${'f' + (p.wide ? ' wide' : '')}><span>${p.label}${p.req ? html`<i class="req">*</i>` : null}</span>
 			<select value=${p.value == null ? '' : String(p.value)} onChange=${function (e) { p.onChange(e.target.value); }}>
 				${p.options.map(function (o) { return html`<option key=${o[0]} value=${String(o[0])}>${o[1]}</option>`; })}
 			</select></label>`;
@@ -125,8 +127,8 @@
 				<thead><tr><th>Family</th><th>Centre</th><th>CCS</th><th class="num">Weekly gap</th><th>Status</th><th>Date</th></tr></thead>
 				<tbody>${rows.length === 0 ? html`<tr><td colspan="6" class="empty">No estimates found.</td></tr>` : rows.map(function (r) {
 					return html`<tr key=${r.id} class="rowlink" onClick=${function () { props.onOpen(r.id); }}>
-						<td><strong>${r.parent_name || '—'}</strong><br/><span class="muted">${r.parent_email || ''}</span></td>
-						<td>${r.centre || '—'}</td><td>${r.ccs_pct}%</td><td class="num">${money(r.weekly_gap)}</td>
+						<td><strong>${r.parent_name || '-'}</strong><br/><span class="muted">${r.parent_email || ''}</span></td>
+						<td>${r.centre || '-'}</td><td>${r.ccs_pct}%</td><td class="num">${money(r.weekly_gap)}</td>
 						<td><span class=${'badge ' + (STC[r.status] || '')}>${r.status}</span></td>
 						<td class="muted">${(r.created_at || '').substring(0, 10)}</td></tr>`;
 				})}</tbody></table></div>`}
@@ -135,33 +137,165 @@
 	function Detail(props) {
 		var s = useState(null), d = s[0], setD = s[1];
 		var ss = useState(''), saving = ss[0], setSaving = ss[1];
-		useEffect(function () { api('estimates/' + props.id).then(function (r) { setD(r.body); }); }, [props.id]);
+		var ps = useState('fortnight'), per = ps[0], setPer = ps[1];
+		useEffect(function () { api('estimates/' + props.id).then(function (r) { setD(r.body); if (r.body && r.body.results && r.body.results.period) { setPer(r.body.results.period); } }); }, [props.id]);
 		if (!d) { return html`<div class="loading">Loading…</div>`; }
-		var res = d.results || {}, tf = res.totals_fortnight || {};
+		var res = d.results || {}, inp = d.inputs || {}, tf = res.totals_fortnight || {}, ccs = res.ccs || {};
+		var kids = res.children || [], inKids = inp.children || [];
+		var promo = res.promo || null, cmp = res.compare || {}, byDays = cmp.by_days || [];
+
+		/* Period scaling from the stored per-fortnight totals. */
+		var PMULT = { week: 0.5, fortnight: 1, month: 26 / 12, year: 26 };
+		var PSUF = { week: '/wk', fortnight: '/fortnight', month: '/mo', year: '/yr' };
+		var PLBL = { week: 'Per week', fortnight: 'Per fortnight', month: 'Per month', year: 'Per year' };
+		var m = PMULT[per] || 1, suf = PSUF[per] || '';
+		function sc(n) { return (n || 0) * m; }
+		var promoSave = (promo && promo.ongoing) ? (promo.weekly_saving / 0.5 * m) : 0;
+		var netGap = Math.max(0, sc(tf.gap) - promoSave);
+
 		function setStatus(v) { setSaving(v); api('estimates/' + d.id + '/status', { method: 'POST', body: { status: v } }).then(function () { setD(Object.assign({}, d, { status: v })); setSaving(''); }); }
-		return html`<div>
+
+		var name = d.parent_name || 'Estimate #' + d.id;
+		var initial = (name.trim().charAt(0) || '?').toUpperCase();
+		var ccsStatusTxt = inp.not_eligible ? 'Not eligible for CCS' : (inp.knows_ccs ? 'Known CCS % (entered)' : 'Estimated from income');
+		var enrolTxt = ({ new: 'New enrolment', existing: 'Existing family', other: 'With another provider' })[inp.enrol_status] || '-';
+		var higher = ccs.higher_pct > ccs.standard_pct;
+		/* Attendance days selected in the estimate (max across children), for row highlight. */
+		var selDays = kids.length ? Math.max.apply(null, kids.map(function (c) { return Math.max(c.daysWeek1 || 0, c.daysWeek2 || 0); })) : 0;
+
+		return html`<div class="lead">
 			<button class="link" onClick=${props.onBack}>← Back to estimates</button>
-			<h1 class="page-h">${d.parent_name || 'Estimate #' + d.id}</h1>
+
+			<div class="lead-hero">
+				<div class="lead-id">
+					<div class=${'lead-av ' + (STC[d.status] || '')}>${initial}</div>
+					<div class="lead-id-txt">
+						<h1 class="lead-name">${name}</h1>
+						<div class="lead-sub">
+							<span class=${'badge ' + (STC[d.status] || '')}>${d.status}</span>
+							<span class="lead-dot">•</span><span>${d.centre || 'No centre'}</span>
+							<span class="lead-dot">•</span><span class="muted">Lead #${d.id}</span>
+							<span class="lead-dot">•</span><span class="muted">${(d.created_at || '').substring(0, 16)}</span>
+						</div>
+					</div>
+				</div>
+				<label class="lead-per"><span>View</span>
+					<select class="calc-period" value=${per} onChange=${function (e) { setPer(e.target.value); }}>
+						${['week', 'fortnight', 'month', 'year'].map(function (k) { return html`<option key=${k} value=${k}>${PLBL[k]}</option>`; })}
+					</select>
+				</label>
+			</div>
+
+			<div class="lead-kpis">
+				<div class="lead-kpi"><span class="lead-kpi-l">Gross fee${suf}</span><span class="lead-kpi-n">${money(sc(tf.fee))}</span></div>
+				<div class="lead-kpi"><span class="lead-kpi-l">Government pays${suf}</span><span class="lead-kpi-n good">${money(sc(tf.subsidy))}</span></div>
+				<div class="lead-kpi hi"><span class="lead-kpi-l">Out of pocket${suf}</span><span class="lead-kpi-n">${money(netGap)}</span></div>
+				<div class="lead-kpi"><span class="lead-kpi-l">CCS rate</span><span class="lead-kpi-n">${ccs.standard_pct != null ? ccs.standard_pct + '%' : d.ccs_pct + '%'}</span></div>
+			</div>
+
 			<div class="grid2">
-				<div class="card"><h3>Family</h3><dl class="dl">
-					<div><dt>Email</dt><dd>${d.parent_email || '—'}</dd></div>
-					<div><dt>Phone</dt><dd>${d.parent_phone || '—'}</dd></div>
-					<div><dt>Centre</dt><dd>${d.centre || '—'}</dd></div>
-					<div><dt>Income</dt><dd>${money(d.income)}</dd></div>
-					<div><dt>CCS</dt><dd>${d.ccs_pct}%</dd></div>
+				<div class="card"><h3><${Icon} name="users" size=${15} /> Family & enrolment</h3><dl class="dl">
+					<div><dt>Parent name</dt><dd>${d.parent_name || '-'}</dd></div>
+					<div><dt>Email</dt><dd>${d.parent_email ? html`<a class="lead-link" href=${'mailto:' + d.parent_email}>${d.parent_email}</a>` : '-'}</dd></div>
+					<div><dt>Phone</dt><dd>${d.parent_phone ? html`<a class="lead-link" href=${'tel:' + d.parent_phone}>${d.parent_phone}</a>` : '-'}</dd></div>
+					<div><dt>Centre</dt><dd>${d.centre || '-'}</dd></div>
+					<div><dt>Enrolment status</dt><dd>${enrolTxt}</dd></div>
+					<div><dt>Preferred start</dt><dd>${inp.start_date || 'Not set'}</dd></div>
 					<div><dt>Created</dt><dd>${(d.created_at || '').substring(0, 16)}</dd></div>
 				</dl></div>
-				<div class="card"><h3>Estimate (per fortnight)</h3><dl class="dl">
-					<div><dt>Gross fee</dt><dd>${money(tf.fee)}</dd></div>
-					<div><dt>CCS subsidy</dt><dd class="good">−${money(tf.subsidy)}</dd></div>
-					<div><dt>Out of pocket</dt><dd><strong>${money(tf.gap)}</strong></dd></div>
-					${res.promo ? html`<div><dt>Promotion</dt><dd>${res.promo.name}</dd></div>` : null}
-				</dl>
-				<h3 style=${{ marginTop: '16px' }}>Status</h3>
-				<div class="statusbtns">${['new', 'contacted', 'enrolled', 'lost'].map(function (k) {
-					return html`<button key=${k} disabled=${saving === k} class=${'sbtn' + (d.status === k ? ' active ' + STC[k] : '')} onClick=${function () { setStatus(k); }}>${k}</button>`;
-				})}</div></div>
+
+				<div class="card"><h3><${Icon} name="percent" size=${15} /> Subsidy details</h3><dl class="dl">
+					<div><dt>CCS basis</dt><dd>${ccsStatusTxt}</dd></div>
+					<div><dt>Combined family income</dt><dd>${money(d.income)}</dd></div>
+					<div><dt>Standard CCS %</dt><dd>${ccs.standard_pct != null ? ccs.standard_pct + '%' : d.ccs_pct + '%'}</dd></div>
+					${higher ? html`<div><dt>Higher CCS % (younger child)</dt><dd class="good">${ccs.higher_pct}%</dd></div>` : null}
+					<div><dt>Subsidised hours / fortnight</dt><dd>${ccs.hours_per_fortnight != null ? ccs.hours_per_fortnight + ' hrs' : '-'}</dd></div>
+					${inp.activity_hours != null && inp.activity_hours !== '' ? html`<div><dt>Eligible hours (entered)</dt><dd>${inp.activity_hours} hrs</dd></div>` : null}
+					<div><dt>CCS withholding</dt><dd>${inp.withholding != null ? inp.withholding + '%' : '5%'}</dd></div>
+					<div><dt>First Nations loading</dt><dd>${inp.is_atsi ? 'Yes' : 'No'}</dd></div>
+				</dl></div>
 			</div>
+
+			<div class="grid2">
+				<div class="card"><h3><${Icon} name="dollar" size=${15} /> Estimate breakdown <span class="lead-h-note">${PLBL[per]}</span></h3>
+					<div class="lead-fig"><span class="l">Gross fee</span><span class="v">${money(sc(tf.fee))}</span></div>
+					<div class="lead-fig sub"><span class="l">CCS subsidy (before withholding)</span><span class="v good">−${money(sc(tf.subsidy_full))}</span></div>
+					<div class="lead-fig sub"><span class="l">Withholding held back (5%)</span><span class="v">+${money(sc(tf.withholding))}</span></div>
+					<div class="lead-fig"><span class="l">Government pays now</span><span class="v good">−${money(sc(tf.subsidy))}</span></div>
+					${promoSave > 0 ? html`<div class="lead-fig"><span class="l">Promotion saving</span><span class="v good">−${money(promoSave)}</span></div>` : null}
+					<div class="lead-fig total"><span class="l">Out of pocket</span><span class="v">${money(netGap)}</span></div>
+					<p class="muted mini" style=${{ marginTop: '10px' }}>Estimate only. Final CCS entitlement is determined by Services Australia.</p>
+				</div>
+
+				<div class="lead-side">
+					${promo ? html`<div class="card lead-promo"><h3><${Icon} name="promotions" size=${15} /> Promotion applied</h3>
+						<strong class="lead-promo-name">${promo.name}</strong>
+						${promo.description ? html`<p class="muted mini" style=${{ marginTop: '4px' }}>${promo.description}</p>` : null}
+						<div class="lead-promo-figs">
+							${promo.total_value ? html`<div><span>Total offer value</span><b class="good">${money(promo.total_value)}</b></div>` : null}
+							${promo.ongoing ? html`<div><span>Ongoing saving / week</span><b class="good">${money(promo.weekly_saving)}</b></div>` : null}
+							${promo.oneoff ? html`<div><span>One-off saving</span><b class="good">${money(promo.oneoff)}</b></div>` : null}
+						</div>
+					</div>` : null}
+
+					<div class="card"><h3><${Icon} name="check" size=${15} /> Lead status</h3>
+						<div class="statusbtns">${['new', 'contacted', 'enrolled', 'lost'].map(function (k) {
+							return html`<button key=${k} disabled=${saving === k} class=${'sbtn' + (d.status === k ? ' active ' + STC[k] : '')} onClick=${function () { setStatus(k); }}>${k}</button>`;
+						})}</div>
+						<div class="lead-actions">
+							${d.parent_email ? html`<a class="btn" href=${'mailto:' + d.parent_email}>Email family</a>` : null}
+							${d.parent_phone ? html`<a class="btn" href=${'tel:' + d.parent_phone}>Call</a>` : null}
+						</div>
+					</div>
+				</div>
+			</div>
+
+			${kids.length ? html`<div class="card"><h3><${Icon} name="users" size=${15} /> Children (${kids.length})</h3>
+				<div class="lead-kids">${kids.map(function (c, i) {
+					var ik = inKids[i] || {}, days = (c.daysWeek1 || 0) + (c.daysWeek2 || 0);
+					return html`<div class="lead-kid" key=${i}>
+						<div class="lead-kid-head">
+							<strong>Child ${i + 1}</strong>
+							<span class="muted">${ik.dob ? ik.dob + ' · ' : ''}${c.age}y old</span>
+							${c.sibling ? html`<span class="cc-chip ghost">Sibling</span>` : null}
+						</div>
+						<div class="cc-chips lead-kid-chips">
+							<span class="cc-chip">${days} days/ftn</span>
+							<span class="cc-chip">${c.hoursPerDay}h/day</span>
+							<span class=${'cc-chip pct' + (c.isHigher ? ' higher' : '')}>${c.ccs_pct}% CCS${c.isHigher ? ' (higher)' : ''}</span>
+							<span class="cc-chip">${money(c.feePerDay)}/day</span>
+						</div>
+						<div class="lead-kid-grid">
+							<div><span>Days wk 1 / wk 2</span><b>${c.daysWeek1} / ${c.daysWeek2}</b></div>
+							<div><span>Session hours / day</span><b>${c.hoursPerDay}h</b></div>
+							<div><span>Daily fee</span><b>${money(c.feePerDay)}</b></div>
+							<div><span>Hourly fee</span><b>${money(c.hourlyFee)}</b></div>
+							<div><span>Hourly cap</span><b>${money(c.hourlyCap)}</b></div>
+							<div><span>Rate CCS applies to</span><b>${money(c.effRate)}/hr</b></div>
+							<div><span>Gross fee / ftn</span><b>${money(c.fortnightFee)}</b></div>
+							<div><span>Subsidy / ftn</span><b class="good">${money(c.fortnightSub)}</b></div>
+							<div><span>Withholding / ftn</span><b>${money(c.withholding)}</b></div>
+							<div><span>Out of pocket / ftn</span><b>${money(c.gap)}</b></div>
+						</div>
+					</div>`;
+				})}</div>
+			</div>` : null}
+
+			${byDays.length ? html`<div class="card"><h3><${Icon} name="doc" size=${15} /> Attendance package comparison <span class="lead-h-note">per week</span></h3>
+				<div class="tablewrap"><table class="cmp-tbl cmp-wide">
+					<thead><tr><th>Days / week</th><th class="r">Daily rate</th><th class="r">Full fee / wk</th><th class="r">Govt pays</th><th class="r">Family pays / wk</th></tr></thead>
+					<tbody>${byDays.map(function (r) {
+						var rate = r.days ? r.weekly_fee / r.days : 0, govt = r.weekly_fee - r.weekly_gap, cur = r.days === selDays;
+						return html`<tr key=${r.days} class=${cur ? 'lead-cur' : ''}>
+							<td><strong>${r.days} ${r.days === 1 ? 'day' : 'days'}</strong>${cur ? html`<span class="rbadge best">This lead</span>` : null}</td>
+							<td class="r">${money(rate)}</td>
+							<td class="r">${money(r.weekly_fee)}</td>
+							<td class="r good">−${money(govt)}</td>
+							<td class="r"><strong>${money(r.weekly_gap)}</strong></td>
+						</tr>`;
+					})}</tbody>
+				</table></div>
+			</div>` : null}
 		</div>`;
 	}
 
@@ -180,12 +314,12 @@
 		return html`<div>
 			<div class="page-head"><h1 class="page-h">Centres & fees</h1><button class="btn primary" onClick=${function () { setEditing('new'); }}>+ Add centre</button></div>
 			<div class="tablewrap"><table class="tbl">
-				<thead><tr><th>Brand</th><th>Code</th><th>Centre</th><th class="num">Full daily</th><th class="num">Weekly</th><th class="num">WindBack</th><th>Status</th><th></th></tr></thead>
+				<thead><tr><th>Brand</th><th>Code</th><th>Centre</th><th class="num">Full daily</th><th>Status</th><th></th></tr></thead>
 				<tbody>${data.centres.map(function (c) {
 					return html`<tr key=${c.id}>
 						<td><span class="cdot" style=${{ background: c.accent }}></span>${c.brand_name}</td>
 						<td><code>${c.code}</code></td><td>${c.name}</td>
-						<td class="num">${money(c.full_daily_fee)}</td><td class="num">${money(c.weekly_rate)}</td><td class="num">${money(c.windback_rate)}</td>
+						<td class="num">${money(c.full_daily_fee)}</td>
 						<td><span class=${'badge ' + (c.status === 'active' ? 'st-enrolled' : 'st-lost')}>${c.status}</span></td>
 						<td><button class="btn sm" onClick=${function () { setEditing(c.id); }}>Edit</button></td></tr>`;
 				})}</tbody></table></div>
@@ -197,7 +331,7 @@
 		var errs = useState(''), err = errs[0], setErr = errs[1];
 		useEffect(function () {
 			if (props.id) { api('admin/centres/' + props.id).then(function (r) { setForm(r.body); }); }
-			else { setForm({ brand_id: props.brands[0] ? props.brands[0].id : 0, code: '', name: '', status: 'active', phone: '', email: '', address: '', book_tour_url: '', weekly_rate: '', windback_rate: '', effective_from: '', day_fees: { 1: '', 2: '', 3: '', 4: '', 5: '' } }); }
+			else { setForm({ brand_id: props.brands[0] ? props.brands[0].id : 0, code: '', name: '', status: 'active', phone: '', email: '', address: '', book_tour_url: '', effective_from: '', day_fees: { 1: '', 2: '', 3: '', 4: '', 5: '' } }); }
 		}, [props.id]);
 		if (!form) { return html`<div class="loading">Loading…</div>`; }
 		function up(k, v) { setForm(Object.assign({}, form, (function () { var o = {}; o[k] = v; return o; })())); }
@@ -226,8 +360,6 @@
 			</div></div>
 			<div class="card"><h3>Current fees</h3><div class="formgrid">
 				<${Text} label="Effective from" type="date" value=${form.effective_from} onChange=${function (v) { up('effective_from', v); }} />
-				<${Text} label="Weekly fee ($)" type="number" step="0.01" value=${form.weekly_rate} onChange=${function (v) { up('weekly_rate', v); }} />
-				<${Text} label="WindBack fee ($)" type="number" step="0.01" value=${form.windback_rate} onChange=${function (v) { up('windback_rate', v); }} />
 			</div>
 			<h3 style=${{ marginTop: '14px' }}>Daily fee by attendance days</h3>
 			<p class="muted mini" style=${{ margin: '-6px 0 12px' }}>The exact per-day fee a child pays based on how many days per week they attend.</p>
@@ -285,7 +417,7 @@
 			<button class="link" onClick=${props.onCancel}>← Back to promotions</button>
 			<h1 class="page-h">${props.promo ? 'Edit promotion' : 'New promotion'}</h1>
 			<div class="card"><h3>Offer</h3><div class="formgrid">
-				<${Text} wide=${true} label="Name" value=${form.name} onChange=${function (v) { up('name', v); }} placeholder="e.g. 4 Weeks Free — Winter" />
+				<${Text} wide=${true} label="Name" value=${form.name} onChange=${function (v) { up('name', v); }} placeholder="e.g. 4 Weeks Free (Winter)" />
 				<${Sel} label="Type" value=${form.type} onChange=${function (v) { up('type', v); }} options=${typeOpts} />
 				<${Text} label="Value" type="number" step="0.01" value=${form.value} onChange=${function (v) { up('value', v); }} />
 				<${Sel} label="How it applies" value=${form.unit} onChange=${function (v) { up('unit', v); }} options=${[['weeks', 'Weeks free (1 free / 5 weeks)'], ['percent', '% off parent gap'], ['amount', '$ off weekly gap'], ['sibling', 'Sibling discount (% off 2nd+ child fee)'], ['oneoff', 'One-off credit ($, e.g. refer a friend)']]} />
@@ -298,7 +430,7 @@
 			<div class="card"><h3>Where it applies</h3><p class="muted" style=${{ marginTop: '-6px', marginBottom: '10px' }}>Leave all unticked for a group-wide offer.</p>
 				<div class="grid2">
 					<div><strong class="mini">Brands</strong><${Checks} value=${form.brand_ids} onChange=${function (v) { up('brand_ids', v); }} items=${props.brands.map(function (b) { return { id: b.id, label: b.name }; })} /></div>
-					<div><strong class="mini">Centres</strong><div class="scrollbox"><${Checks} value=${form.centre_ids} onChange=${function (v) { up('centre_ids', v); }} items=${props.centres.map(function (c) { return { id: c.id, label: c.brand_name + ' — ' + c.name }; })} /></div></div>
+					<div><strong class="mini">Centres</strong><div class="scrollbox"><${Checks} value=${form.centre_ids} onChange=${function (v) { up('centre_ids', v); }} items=${props.centres.map(function (c) { return { id: c.id, label: c.brand_name + ' · ' + c.name }; })} /></div></div>
 				</div>
 			</div>
 			<${Actions} saving=${saving} error=${err} onSave=${save} onCancel=${props.onCancel} onDelete=${props.promo ? del : null} />
@@ -376,7 +508,7 @@
 		var ss = useState(false), saving = ss[0], setSaving = ss[1];
 		var errs = useState(''), err = errs[0], setErr = errs[1];
 		var existingIds = props.data.managers.map(function (m) { return m.id; });
-		var userOpts = [[0, '— Select a user —']].concat(props.data.assignable.filter(function (u) { return existingIds.indexOf(u.id) === -1; }).map(function (u) { return [u.id, u.name + ' (' + u.email + ')']; }));
+		var userOpts = [[0, 'Select a user…']].concat(props.data.assignable.filter(function (u) { return existingIds.indexOf(u.id) === -1; }).map(function (u) { return [u.id, u.name + ' (' + u.email + ')']; }));
 		function assign() {
 			if (!userId) { setErr('Choose a user.'); return; }
 			setSaving(true); setErr('');
@@ -406,15 +538,22 @@
 	/* ---------------- Calculator ---------------- */
 	function kv(k, v) { var o = {}; o[k] = v; return o; }
 	function blankChild() { return { dob: '', hours_per_day: 10, fee_override: '', custom: false, days_week1: 3, days_week2: 3 }; }
-	function defaultForm(id) { return { centre_id: id, knows_ccs: false, income: '', known_pct: '', activity_hours: 49, withholding: 5, is_atsi: false, rate_basis: 'standard', promotion_id: 0, enrol_status: 'new', start_date: '', period: 'fortnight', parent_name: '', parent_email: '', parent_phone: '', children: [blankChild()] }; }
+	function defaultForm(id) { return { centre_id: id, knows_ccs: false, not_eligible: false, income: '', known_pct: '', activity_hours: '', withholding: 5, is_atsi: false, rate_basis: 'standard', promotion_id: 0, enrol_status: 'new', start_date: '', period: 'fortnight', parent_name: '', parent_email: '', parent_phone: '', children: [blankChild()] }; }
+	/* Persist the in-progress calculation so switching tabs (or a reload) doesn't lose it. */
+	var DRAFT_KEY = 'ccsp_calc_draft';
+	function loadDraft() { try { var s = window.localStorage.getItem(DRAFT_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+	function saveDraft(v) { try { window.localStorage.setItem(DRAFT_KEY, JSON.stringify(v)); } catch (e) {} }
+	function clearDraft() { try { window.localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
 	/** Whether enough has been entered to show a meaningful estimate. */
-	/** Enough to compute the CCS % (income or known %) — no child info needed. */
+	/** Enough to compute the CCS % (income or known %). No child info needed. */
 	function pctReady(f) {
+		if (f.not_eligible) { return true; }
 		return f.knows_ccs ? (f.known_pct !== '' && f.known_pct != null) : (f.income !== '' && f.income != null);
 	}
 	/** Enough for a full estimate: CCS % plus every child's DOB, days and hours. */
 	function estimateReady(f) {
 		if (!pctReady(f) || !f.children.length) { return false; }
+		if (!f.not_eligible && (f.activity_hours === '' || f.activity_hours == null)) { return false; }
 		return f.children.every(function (c) {
 			var days = (parseInt(c.days_week1, 10) || 0) + (parseInt(c.days_week2, 10) || 0);
 			return c.dob && days > 0 && (parseFloat(c.hours_per_day) || 0) > 0;
@@ -437,13 +576,15 @@
 		var savS = useState(false), saving = savS[0], setSaving = savS[1];
 		var ocS = useState(0), openIdx = ocS[0], setOpenIdx = ocS[1];
 
-		useEffect(function () { api('calc/centres').then(function (r) { var list = (r.body && r.body.centres) || []; setCentres(list); if (list.length) { setF(defaultForm(list[0].id)); } }); }, []);
+		useEffect(function () { api('calc/centres').then(function (r) { var list = (r.body && r.body.centres) || []; setCentres(list); if (list.length) { var d = loadDraft(); if (d && d.centre_id && list.some(function (c) { return c.id === d.centre_id; })) { setF(d); } else { setF(defaultForm(list[0].id)); } } }); }, []);
 		useEffect(function () {
 			if (!f || !f.centre_id) { return; }
 			if (!pctReady(f)) { setRes(null); return; }
-			var t = setTimeout(function () { api('calculate', { method: 'POST', body: f }).then(function (r) { if (r.ok && r.body && r.body.ok) { setRes(r.body); } }); }, 300);
+			var payload = f.not_eligible ? Object.assign({}, f, { knows_ccs: true, known_pct: 0 }) : f;
+			var t = setTimeout(function () { api('calculate', { method: 'POST', body: payload }).then(function (r) { if (r.ok && r.body && r.body.ok) { setRes(r.body); } }); }, 300);
 			return function () { clearTimeout(t); };
 		}, [f]);
+		useEffect(function () { if (f) { saveDraft(f); } }, [f]);
 
 		if (!centres) { return html`<div class="loading">Loading calculator…</div>`; }
 		if (!centres.length) { return html`<div class="card">No centre is assigned to your account.</div>`; }
@@ -466,18 +607,59 @@
 				.then(function (r) { setSaving(false); setSaveMsg(r.ok && r.body.ok ? 'Saved as lead #' + r.body.id + '.' : 'Could not save.'); });
 		}
 
+		function resetForm() { clearDraft(); setRes(null); setSaveMsg(''); setOpenIdx(0); setF(defaultForm(centre.id)); }
 		var ready = estimateReady(f);
+		var missing = [];
+		if (!pctReady(f)) { missing.push(f.knows_ccs ? 'Known CCS %' : 'Combined family income'); }
+		if (!f.not_eligible && (f.activity_hours === '' || f.activity_hours == null)) { missing.push('Eligible hours per fortnight'); }
+		f.children.forEach(function (c, i) {
+			var lbl = 'Child ' + (i + 1);
+			var dsum = (parseInt(c.days_week1, 10) || 0) + (parseInt(c.days_week2, 10) || 0);
+			if (!c.dob) { missing.push(lbl + ' date of birth'); }
+			if (!(dsum > 0)) { missing.push(lbl + ' attendance days'); }
+			if (!((parseFloat(c.hours_per_day) || 0) > 0)) { missing.push(lbl + ' session hours'); }
+		});
 		var promoObj = (centre.promotions || []).filter(function (p) { return p.id === f.promotion_id; })[0];
 		var g = res ? res.totals_period.fee : 0, govt = res ? res.totals_period.subsidy : 0, oop = res ? res.net_period_gap : 0;
 		var wh = res ? res.totals_period.withholding : 0, promoSave = res ? res.promo_period_saving : 0;
-		var pctTxt = res ? (res.ccs.higher_pct > res.ccs.standard_pct ? res.ccs.standard_pct + '–' + res.ccs.higher_pct : res.ccs.standard_pct) : '0';
+		var subFull = res ? res.totals_period.subsidy_full : 0;
+		var pctTxt = res ? (res.ccs.higher_pct > res.ccs.standard_pct ? res.ccs.standard_pct + ' to ' + res.ccs.higher_pct : res.ccs.standard_pct) : '0';
 		var hours = res ? res.ccs.hours_per_fortnight : 72;
+		var baseDayRate = res && res.compare && res.compare.by_days ? res.compare.by_days.reduce(function (m, d) { var pd = d.days ? d.weekly_fee / d.days : 0; return pd > m ? pd : m; }, 0) : 0;
+		// Cap-aware upsell suggestion + per-row badges for Compare & choose.
+		var byDays = res && res.compare && res.compare.by_days ? res.compare.by_days : [];
+		var dayRate = {}; byDays.forEach(function (d) { dayRate[d.days] = d.days ? d.weekly_fee / d.days : 0; });
+		var minDayRate = byDays.length ? Math.min.apply(null, byDays.map(function (d) { return d.days ? d.weekly_fee / d.days : Infinity; })) : 0;
+		var capDaysWeek = sessionH > 0 ? (hours / (sessionH * 2)) : 0; // subsidised days per week
+		var curDays = f.children.length ? Math.max.apply(null, f.children.map(function (c) { return Math.max(parseInt(c.days_week1, 10) || 0, parseInt(c.days_week2, 10) || 0); })) : 0;
+		var suggest = null;
+		if (byDays.length && curDays > 0) {
+			var rowFor = function (n) { for (var k = 0; k < byDays.length; k++) { if (byDays[k].days === n) { return byDays[k]; } } return null; };
+			var curRow = rowFor(curDays), maxDays = byDays[byDays.length - 1].days, capFloor = Math.floor(capDaysWeek + 1e-9);
+			if (curRow && curDays < maxDays) {
+				var target = 0, reason = '';
+				if (curDays < capFloor) { target = Math.min(capFloor, maxDays); reason = 'ccs'; }
+				else { for (var j = byDays.length - 1; j >= 0; j--) { if (byDays[j].days > curDays && dayRate[byDays[j].days] < dayRate[curDays] - 0.001) { target = byDays[j].days; reason = 'discount'; break; } } }
+				var tRow = rowFor(target);
+				if (target > curDays && tRow) {
+					var exFee = tRow.weekly_fee - curRow.weekly_fee, exGovt = (tRow.weekly_fee - tRow.weekly_gap) - (curRow.weekly_fee - curRow.weekly_gap);
+					suggest = { from: curDays, to: target, reason: reason,
+						extraGap: tRow.weekly_gap - curRow.weekly_gap,
+						coverage: exFee > 0 ? Math.round(exGovt / exFee * 100) : 0,
+						disc: dayRate[curDays] > 0 ? Math.round((dayRate[curDays] - dayRate[target]) / dayRate[curDays] * 100) : 0,
+						rate: dayRate[target], usedHrs: Math.round(curDays * sessionH * 2), capHrs: hours };
+				}
+			}
+		}
 
 		return html`<div class="calc-page">
 			<div class="page-head"><h1 class="page-h">New calculation</h1>
-				<label class="calc-centre"><span>Centre</span><select value=${String(f.centre_id)} onChange=${function (e) { upCentre(e.target.value); }}>
-					${centres.map(function (c) { return html`<option key=${c.id} value=${String(c.id)}>${c.brand_name + ' — ' + c.name}</option>`; })}
-				</select></label>
+				<div class="ph-right">
+					<button class="btn" onClick=${resetForm}>Reset</button>
+					<label class="calc-centre"><span>Centre</span><select value=${String(f.centre_id)} onChange=${function (e) { upCentre(e.target.value); }}>
+						${centres.map(function (c) { return html`<option key=${c.id} value=${String(c.id)}>${c.brand_name + ' · ' + c.name}</option>`; })}
+					</select></label>
+				</div>
 			</div>
 			<div class="calc-cols">
 					<div class="calc-input">
@@ -492,20 +674,17 @@
 				<div class="card">
 					<div class="subhead">Subsidy details</div>
 					<div class="formgrid">
-						<${Sel} label="Do you know your CCS %?" value=${f.knows_ccs ? '1' : '0'} onChange=${function (v) { up('knows_ccs', v === '1'); }} options=${[['0', 'No — estimate from income'], ['1', 'Yes — I know it']]} />
-						${f.knows_ccs ? html`<${Text} label="Standard CCS % (first child)" type="number" step="0.01" value=${f.known_pct} onChange=${function (v) { up('known_pct', v); }} />`
-							: html`<${Text} label="Combined family income (annual)" type="number" step="1000" value=${f.income} onChange=${function (v) { up('income', v); }} />`}
+						<${Sel} label="CCS status" value=${f.not_eligible ? 'none' : (f.knows_ccs ? '1' : '0')} onChange=${function (v) { if (v === 'none') { setF(Object.assign({}, f, { not_eligible: true })); } else { setF(Object.assign({}, f, { not_eligible: false, knows_ccs: v === '1' })); } }} options=${[['0', 'Estimate from income'], ['1', 'I know the CCS %'], ['none', 'Not eligible for CCS']]} />
+						${f.not_eligible ? html`<div class="f"><span>CCS entitlement</span><div class="static-field">Not eligible<span class="sf-note">parent pays the full fee</span></div></div>`
+							: f.knows_ccs ? html`<${Text} label="Standard CCS % (first child)" req=${true} type="number" step="0.01" value=${f.known_pct} onChange=${function (v) { up('known_pct', v); }} />`
+							: html`<${Text} label="Combined family income (annual)" req=${true} type="number" step="1000" value=${f.income} onChange=${function (v) { up('income', v); }} />`}
 					</div>
-					<div class="formgrid">
-						${f.knows_ccs ? html`<${Text} label="Higher CCS % (auto)" type="number" readOnly=${true} value=${res ? res.ccs.higher_pct : ''} onChange=${function () {}} />`
-							: html`<${F}><${Text} label="Standard CCS % (calc)" type="number" readOnly=${true} value=${res ? res.ccs.standard_pct : ''} onChange=${function () {}} /><${Text} label="Higher CCS % (additional)" type="number" readOnly=${true} value=${res ? res.ccs.higher_pct : ''} onChange=${function () {}} /><//>`}
-					</div>
-					<div class="formgrid">
-						<${Sel} label="Activity hours / fortnight" value=${String(f.activity_hours)} onChange=${function (v) { up('activity_hours', parseFloat(v)); }} options=${[['49', 'More than 48 hours'], ['0', '48 hours or less']]} />
-						<${Sel} label="CCS withholding" value=${String(f.withholding)} onChange=${function (v) { up('withholding', parseFloat(v)); }} options=${[['5', '5%'], ['4', '4%'], ['3', '3%'], ['2', '2%'], ['1', '1%'], ['0', '0%']]} />
-					</div>
-					<p class="muted mini" style=${{ marginTop: '8px' }}>3-Day Guarantee: from Jan 2026, all eligible families receive at least 72 hours (3 days) per fortnight regardless of activity.</p>
-					<p class="muted mini" style=${{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>Choose the rate, package and offer from the <strong>Compare & choose</strong> panel on the right — tap any row to apply.</p>
+					${f.not_eligible ? html`<p class="muted mini">This family is not eligible for CCS (for example, a temporary visa that does not meet the residency rules), so the estimate shows the full fee with no subsidy.</p>`
+						: html`<div class="formgrid">
+						${f.knows_ccs ? null
+							: html`<${Text} label="Standard CCS % (calc)" type="number" readOnly=${true} value=${res ? res.ccs.standard_pct : ''} onChange=${function () {}} />`}
+						<${Sel} label="Eligible hours / fortnight" req=${true} value=${f.activity_hours} onChange=${function (v) { up('activity_hours', v === '' ? '' : parseFloat(v)); }} options=${[['', 'Select…'], ['0', '72 hrs (3-Day Guarantee)'], ['49', '100 hrs (48+ hrs activity / exemption)']]} />
+					</div>`}
 				</div>
 				<div class="card">
 					<div class="subhead">Children</div>
@@ -515,17 +694,30 @@
 						var autoFee = resolveFee(centre, f.rate_basis, days, i);
 						var basisLbl = f.rate_basis === 'weekly' ? 'weekly rate' : f.rate_basis === 'windback' ? 'WindBack rate' : (days + '-day rate');
 						var totalDays = (parseInt(ch.days_week1, 10) || 0) + (parseInt(ch.days_week2, 10) || 0);
-						var summ = (ch.dob || 'No DOB') + ' · ' + totalDays + ' days/ftn';
+						var rc = res && res.children ? res.children[i] : null;
+						var ageTxt = ch.dob ? (rc && rc.age > 0 ? rc.age + 'y' : '<1y') : null;
+						var chips = html`<span class="cc-chips">
+							${ageTxt ? html`<span class="cc-chip">${ageTxt}</span>` : null}
+							<span class="cc-chip">${totalDays} days/ftn</span>
+							${ch.hours_per_day ? html`<span class="cc-chip">${ch.hours_per_day}h/day</span>` : null}
+							${rc && rc.ccs_pct != null ? html`<span class=${'cc-chip pct' + (rc.isHigher ? ' higher' : '')}>${rc.ccs_pct}% CCS</span>` : null}
+							${rc && rc.feePerDay ? html`<span class="cc-chip ghost">${money(rc.feePerDay)}/day</span>` : null}
+							${rc && rc.gap != null ? html`<span class="cc-chip ghost">gap ${money(rc.gap)}/ftn</span>` : null}
+						</span>`;
 						return html`<div class=${'calc-child' + (openThis ? ' open' : '')} key=${i}>
 							<div class="calc-child-head" onClick=${function () { setOpenIdx(openThis ? -1 : i); }}>
-								<strong>Child ${i + 1}</strong>
-								<span class="cc-right">${!openThis ? html`<span class="cc-sum">${summ}</span>` : null}${f.children.length > 1 ? html`<button class="xbtn" onClick=${function (e) { e.stopPropagation(); removeChild(i); }}>×</button>` : null}<span class="cc-caret">${openThis ? '▲' : '▼'}</span></span>
+								<div class="cc-headrow">
+									<span class="cc-title"><strong>Child ${i + 1}</strong><span class="cc-sub">${ch.dob || 'No DOB'}</span></span>
+									<span class="cc-right">${f.children.length > 1 ? html`<button class="xbtn" onClick=${function (e) { e.stopPropagation(); removeChild(i); }}>×</button>` : null}<span class="cc-caret">${openThis ? '▲' : '▼'}</span></span>
+								</div>
+								${!openThis ? html`<div class="cc-chiprow">${chips}</div>` : null}
 							</div>
 							${openThis ? html`<div class="calc-child-body">
-								<div class="formgrid"><${Text} label="Date of birth" type="date" value=${ch.dob} onChange=${function (v) { upChild(i, 'dob', v); }} />
-									<${Text} label="Session — hours / day" type="number" step="0.5" value=${ch.hours_per_day} onChange=${function (v) { upChild(i, 'hours_per_day', v); }} /></div>
-								<div class="cd-row"><${Text} label="Days — wk 1" type="number" min="0" max="7" value=${ch.days_week1} onChange=${function (v) { upChild(i, 'days_week1', v); }} />
-									<${Text} label="Days — wk 2" type="number" min="0" max="7" value=${ch.days_week2} onChange=${function (v) { upChild(i, 'days_week2', v); }} />
+								<div class="cc-detailstrip">${chips}</div>
+								<div class="formgrid"><${Text} label="Date of birth" req=${true} type="date" max=${todayISO()} value=${ch.dob} onChange=${function (v) { if (v && v > todayISO()) { return; } upChild(i, 'dob', v); }} />
+									<${Text} label="Session hours / day" req=${true} type="number" step="0.5" value=${ch.hours_per_day} onChange=${function (v) { upChild(i, 'hours_per_day', v); }} /></div>
+								<div class="cd-row"><${Text} label="Days wk 1" req=${true} type="number" min="0" max="7" value=${ch.days_week1} onChange=${function (v) { upChild(i, 'days_week1', v); }} />
+									<${Text} label="Days wk 2" req=${true} type="number" min="0" max="7" value=${ch.days_week2} onChange=${function (v) { upChild(i, 'days_week2', v); }} />
 									${!ch.custom ? html`<div class="f cd-feecell"><span>Daily fee</span><div class="fee-box"><strong>${money(autoFee)}</strong><span class="fee-box-b">${basisLbl}</span><button class="linkmini" onClick=${function () { upChildMulti(i, { custom: true, fee_override: autoFee }); }}>Edit</button></div></div>`
 										: html`<${Text} label="Custom fee ($)" type="number" step="0.01" value=${ch.fee_override} onChange=${function (v) { upChild(i, 'fee_override', v); }} />`}</div>
 								${ch.custom ? html`<p class="muted mini">Manual rate, overriding the ${basisLbl}. <button class="linkmini" onClick=${function () { upChildMulti(i, { custom: false, fee_override: '' }); }}>Use automatic</button></p>` : null}
@@ -543,24 +735,19 @@
 							<option value="week">per week</option><option value="fortnight">per fortnight</option><option value="month">per month</option><option value="year">per year</option></select></div>
 					${!res || !ready ? html`<div class="calc-empty">
 						<div class="ce-ic"><${Icon} name="estimates" size=${22} /></div>
-						<p>${res ? html`CCS estimated at <b>${res.ccs.standard_pct}%</b>. Now add each child's <b>date of birth</b> and <b>attendance days</b> to see the full fee estimate and offers.` : html`Enter the <b>family income</b> (or known CCS %) to estimate the subsidy, then add child details for the full estimate.`}</p>
+						${missing.length ? html`<${F}><p class="ce-lead">To calculate CCS, add these details:</p><ul class="ce-check">${missing.map(function (m) { return html`<li key=${m}>${m}</li>`; })}</ul><//>` : html`<p>Calculating estimate…</p>`}
 					</div>` : html`<${F}>
 						<div class="est-top">
 						<div class="est-summary">
 							<div class="subhead">Summary</div>
 						<div class="calc-fig"><span class="l">Gross fee</span><span class="v">${money(g)}</span></div>
-						<div class="calc-fig"><span class="l">Government pays (CCS)</span><span class="v calc-good">−${money(govt)}</span></div>
+						<div class="calc-fig"><span class="l">Total subsidy (CCS)</span><span class="v calc-good">${money(subFull)}</span></div>
 						${wh > 0 ? html`<div class="calc-fig sub"><span class="l">Withholding held back <span class="tip" title="The government withholds a % of CCS (default 5%) and reconciles it after you lodge your tax return.">ⓘ</span></span><span class="v">${money(wh)}</span></div>` : null}
+						<div class="calc-fig"><span class="l">Government pays now</span><span class="v calc-good">−${money(govt)}</span></div>
 						${res.promo && promoSave > 0 ? html`<div class="calc-fig"><span class="l">${res.promo.name}</span><span class="v calc-good">−${money(promoSave)}</span></div>` : null}
 						<div class="calc-fig total"><span class="l">Out of pocket</span><span class="v">${money(oop)}</span></div>
 						${res.promo && res.promo.oneoff > 0 ? html`<div class="calc-fig sub"><span class="l">${res.promo.name} <em>(one-off)</em></span><span class="v calc-good">−${money(res.promo.oneoff)}</span></div>` : null}
 						${res.promo ? html`<p class="promo-note">${res.promo.description}${res.promo.unit === 'weeks' ? html` <span class="promo-val">Offer value ${money(res.promo.total_value)}</span>` : null}</p>` : null}
-						<div class="calc-chips"><span class="badge">CCS ${pctTxt}%</span></div>
-						<p class="muted mini" style=${{ margin: '0 0 12px' }}>Subsidised care: up to ${hours} hours per fortnight.</p>
-						${res.children ? html`<details class="calc-bd" open><summary>Per-child breakdown</summary>${res.children.map(function (c, i) {
-							return html`<div class="calc-bd-row" key=${i}><span>Child ${i + 1}${c.age ? ' · ' + c.age + 'y' : ''}${c.sibling ? ' · sibling' : ''}${c.isHigher ? ' · higher' : ''} <em>${c.ccs_pct}%</em></span><span>${money(c.feePerDay)}/day · gap ${money(c.gap)}</span></div>`;
-						})}</details>` : null}
-
 						</div>
 						${res.compare && res.compare.best ? html`<div class="best-card">
 							<div class="best-top"><span class="best-star">★</span> Best value for money</div>
@@ -571,29 +758,31 @@
 						</div>
 						${res.compare ? html`<div class="calc-compare">
 							<div class="cmp-title">Compare & choose <span>per week · tap a row to apply</span></div>
+								${suggest ? html`<div class="cmp-suggest">
+									<div class="sug-h">💡 Suggest ${suggest.to} days <span class="sug-from">currently ${suggest.from} ${suggest.from === 1 ? 'day' : 'days'}</span></div>
+									<p class="sug-body">${suggest.reason === 'ccs'
+										? html`This family is using ${suggest.usedHrs} of ${suggest.capHrs} subsidised hours per fortnight. The ${suggest.to - suggest.from} extra ${(suggest.to - suggest.from) === 1 ? 'day is' : 'days are'}${suggest.disc > 0 ? ' a lower daily rate and' : ''} about ${suggest.coverage}% covered by CCS, roughly ${suggest.extraGap >= 0 ? '+' : ''}${money(suggest.extraGap)}/wk more out of pocket.`
+										: html`The daily rate drops to ${money(suggest.rate)} (${suggest.disc}% off). The ${suggest.to - suggest.from} extra ${(suggest.to - suggest.from) === 1 ? 'day is' : 'days are'} past the ${suggest.capHrs}-hour subsidised cap, so about ${suggest.extraGap >= 0 ? '+' : ''}${money(suggest.extraGap)}/wk more.`}</p>
+									<button class="btn sug-apply" onClick=${function () { setAllDays(suggest.to); }}>Apply ${suggest.to} days</button>
+								</div>` : null}
 							<div class="cmp-group">
-								<div class="cmp-h">Packages <span>${sessionH}h/day</span></div>
-								<table class="cmp-tbl"><thead><tr><th>Days</th><th class="r">Rate/day</th><th class="r">Fee</th><th class="r">Out-of-pocket</th></tr></thead><tbody>${res.compare.by_days.map(function (d) {
+								<div class="cmp-h">Attendance packages <span>${sessionH}h/day</span></div>
+									<p class="cmp-note">How many days per week the child attends.</p>
+								<table class="cmp-tbl cmp-wide"><thead><tr><th>Days/wk</th><th class="r">Daily rate</th><th class="r">Full fee/wk</th><th class="r">Govt pays</th><th class="r">Day discount</th><th class="r">Family pays/wk</th></tr></thead><tbody>${res.compare.by_days.map(function (d) {
 									var allD = f.children.every(function (c) { return (parseInt(c.days_week1, 10) || 0) === d.days && (parseInt(c.days_week2, 10) || 0) === d.days; });
 									var perDay = d.days ? d.weekly_fee / d.days : 0;
 									return html`<tr key=${d.days} class=${'cmp-row' + (allD ? ' cmp-active' : '')} onClick=${function () { setAllDays(d.days); }}>
-										<td><span class=${'rdot' + (allD ? ' on' : '')}></span>${d.days} days</td><td class="r cmp-fee">${money(perDay)}</td><td class="r cmp-fee">${money(d.weekly_fee)}</td><td class="r cmp-gap">${money(d.weekly_gap)}</td></tr>`;
+										<td><span class=${'rdot' + (allD ? ' on' : '')}></span>${d.days} days${(capDaysWeek > 0 && d.days <= capDaysWeek + 1e-9) ? html`<span class="rbadge ccs">Within CCS</span>` : null}${(dayRate[d.days - 1] != null && Math.abs(dayRate[d.days - 1] - perDay) < 0.001) ? html`<span class="rbadge same">Same rate</span>` : null}${(Math.abs(perDay - minDayRate) < 0.001 && perDay < baseDayRate - 0.001) ? html`<span class="rbadge best">Best rate</span>` : null}</td><td class="r cmp-fee">${money(perDay)}</td><td class="r cmp-fee">${money(d.weekly_fee)}</td><td class="r cmp-ccs">−${money(d.weekly_fee - d.weekly_gap)}</td><td class="r cmp-save">${baseDayRate > 0 && perDay < baseDayRate ? Math.round((baseDayRate - perDay) / baseDayRate * 100) + '%' : '-'}</td><td class="r cmp-gap">${money(d.weekly_gap)}</td></tr>`;
 								})}</tbody></table>
 							</div>
-							${res.compare.by_basis ? html`<div class="cmp-group">
-								<div class="cmp-h">Rate</div>
-								<table class="cmp-tbl"><thead><tr><th>Rate basis</th><th class="r">Fee</th><th class="r">Out-of-pocket</th></tr></thead><tbody>${res.compare.by_basis.map(function (b) {
-									return html`<tr key=${b.basis} class=${'cmp-row' + (b.basis === f.rate_basis ? ' cmp-active' : '')} onClick=${function () { up('rate_basis', b.basis); }}>
-										<td><span class=${'rdot' + (b.basis === f.rate_basis ? ' on' : '')}></span>${b.label}</td><td class="r cmp-fee">${money(b.weekly_fee)}</td><td class="r cmp-gap">${money(b.weekly_gap)}</td></tr>`;
-								})}</tbody></table>
-							</div>` : null}
 							${res.compare.by_promo.length > 1 ? html`<div class="cmp-group">
-								<div class="cmp-h">Offers</div>
-								<table class="cmp-tbl"><thead><tr><th>Offer</th><th class="r">Saving</th><th class="r">Out-of-pocket</th></tr></thead><tbody>${res.compare.by_promo.map(function (p) {
+								<div class="cmp-h">Special offers</div>
+									<p class="cmp-note">Discounts you can apply for this family.</p>
+								<table class="cmp-tbl"><thead><tr><th>Offer</th><th class="r">Saving</th><th class="r">Family pays/wk</th></tr></thead><tbody>${res.compare.by_promo.map(function (p) {
 									return html`<tr key=${p.id} class=${'cmp-row' + (p.id === f.promotion_id ? ' cmp-active' : '')} onClick=${function () { up('promotion_id', p.id); }}>
-										<td><span class=${'rdot' + (p.id === f.promotion_id ? ' on' : '')}></span>${p.name}</td><td class="r cmp-save">${p.weekly_saving > 0 ? '−' + money(p.weekly_saving) + '/wk' : (p.oneoff > 0 ? '−' + money(p.oneoff) + ' once' : '—')}</td><td class="r cmp-gap">${money(p.weekly_gap)}</td></tr>`;
+										<td><span class=${'rdot' + (p.id === f.promotion_id ? ' on' : '')}></span>${p.name}</td><td class="r cmp-save">${p.weekly_saving > 0 ? '−' + money(p.weekly_saving) + '/wk' : (p.oneoff > 0 ? '−' + money(p.oneoff) + ' once' : '-')}</td><td class="r cmp-gap">${money(p.weekly_gap)}</td></tr>`;
 								})}</tbody></table>
-								${promoObj && promoObj.terms ? html`<details class="calc-terms"><summary>Terms & conditions — ${promoObj.name}</summary><div>${promoObj.terms}</div></details>` : null}
+								${promoObj && promoObj.terms ? html`<details class="calc-terms"><summary>Terms & conditions: ${promoObj.name}</summary><div>${promoObj.terms}</div></details>` : null}
 							</div>` : null}
 						</div>` : null}
 					<//>`}
@@ -613,12 +802,12 @@
 		var whPct = f.withholding;
 		var basisLbl = f.rate_basis === 'weekly' ? 'weekly rate' : f.rate_basis === 'windback' ? 'WindBack rate' : 'standard day-tier';
 		return html`<details class="calc-explain">
-			<summary class="ex-head"><strong>How this estimate is calculated</strong><span class="ex-temp">Temporary — click to expand · will be removed</span></summary>
+			<summary class="ex-head"><strong>How this estimate is calculated</strong><span class="ex-temp">Temporary · click to expand · will be removed</span></summary>
 			<div class="ex-grid">
 				<div class="ex-block">
 					<h4>1 · Inputs & CCS %</h4>
 					<ul>
-						<li>Centre: <b>${centre.brand_name} — ${centre.name}</b>, fee basis: <b>${basisLbl}</b></li>
+						<li>Centre: <b>${centre.brand_name} · ${centre.name}</b>, fee basis: <b>${basisLbl}</b></li>
 						<li>${f.knows_ccs ? html`Known CCS: <b>${f.known_pct}%</b>` : html`Family income: <b>${money(f.income)}</b> → Standard CCS <b>${res.ccs.standard_pct}%</b>${res.ccs.higher_pct > res.ccs.standard_pct ? html`, Higher CCS <b>${res.ccs.higher_pct}%</b> (2nd+ child under 6)` : null}`}</li>
 						<li>Activity: <b>${f.activity_hours >= 49 ? 'more than 48 hrs' : '48 hrs or less'}</b> → subsidised hours <b>${hrsFtn}/fortnight</b> (${hrsWk}/week). The 3-Day Guarantee floors this at 72.</li>
 						<li>Withholding: <b>${whPct}%</b> of the CCS is held back by the government until tax reconciliation.</li>
@@ -626,19 +815,19 @@
 				</div>
 				${res.children.map(function (c, i) {
 					var days = c.daysWeek1 + c.daysWeek2;
-					var weeklyEnt = c.hourlyCCS * hrsWk;
+					var attHrs = days * c.hoursPerDay, feeAboveCap = c.hourlyFee > c.hourlyCap + 0.001, overCap = attHrs > hrsFtn + 0.001;
 					return html`<div class="ex-block" key=${i}>
-						<h4>${i + 2} · Child ${i + 1}${c.age ? ' (' + c.age + 'y)' : ''}${c.sibling ? ' — sibling rate' : ''}</h4>
+						<h4>${i + 2} · Child ${i + 1}${c.age ? ' (' + c.age + 'y)' : ''}${c.sibling ? ' · sibling rate' : ''}</h4>
 						<ol>
-							<li>Daily fee <b>${money(c.feePerDay)}</b> ÷ ${c.hoursPerDay} hrs = hourly fee <b>${money(c.hourlyFee)}</b></li>
-							<li>Age cap (CBDC${c.age < 6 ? ', below school age' : ''}): <b>${money(c.hourlyCap)}</b>/hr → effective rate min(fee, cap) = <b>${money(c.effRate)}</b></li>
-							<li>Hourly CCS = ${money(c.effRate)} × ${c.ccs_pct}% = <b>${money(c.hourlyCCS)}</b></li>
-							<li>Weekly entitlement = ${money(c.hourlyCCS)} × ${hrsWk} hrs = <b>${money(weeklyEnt)}</b> (capped by hours attended & fee)</li>
-							<li>Attendance ${c.daysWeek1} + ${c.daysWeek2} = <b>${days} days/ftn</b> → gross fee <b>${money(c.fortnightFee)}</b></li>
-							<li>Subsidy (full) <b>${money(c.subFull)}</b> − withholding <b>${money(c.withholding)}</b> = subsidy paid <b>${money(c.fortnightSub)}</b></li>
-							<li>Out of pocket = ${money(c.fortnightFee)} − ${money(c.fortnightSub)} = <b>${money(c.gap)}</b> / fortnight</li>
+							<li><b>Centre's hourly rate:</b> daily fee ${money(c.feePerDay)} ÷ ${c.hoursPerDay} hrs/day = <b>${money(c.hourlyFee)}/hr</b></li>
+							<li><b>Government hourly cap:</b> CCS is only paid up to <b>${money(c.hourlyCap)}/hr</b> (centre care${c.age < 6 ? ', below school age' : ''}). ${feeAboveCap ? html`Your rate is above the cap, so CCS is worked out on <b>${money(c.effRate)}/hr</b> (the lower value), not your full rate.` : html`Your rate is within the cap, so CCS uses your full <b>${money(c.effRate)}/hr</b>.`}</li>
+							<li><b>Subsidy per hour:</b> ${money(c.effRate)}/hr × ${c.ccs_pct}% CCS rate = <b>${money(c.hourlyCCS)}/hr</b></li>
+							<li><b>Hours the government covers:</b> attending ${c.daysWeek1} + ${c.daysWeek2} days × ${c.hoursPerDay} hrs = <b>${attHrs} hrs/fortnight</b>. CCS covers up to <b>${hrsFtn} hrs/fortnight</b>, so ${overCap ? html`only the first <b>${hrsFtn} hrs</b> are subsidised (the rest is full price).` : html`all <b>${attHrs} hrs</b> are subsidised.`}</li>
+							<li><b>Gross fee:</b> ${days} days/fortnight × ${money(c.feePerDay)} = <b>${money(c.fortnightFee)}</b></li>
+							<li><b>Subsidy:</b> ${money(c.hourlyCCS)}/hr × covered hours = <b>${money(c.subFull)}</b> (never more than the fee); less ${whPct}% withholding ${money(c.withholding)} = <b>${money(c.fortnightSub)}</b> paid now, the rest at tax time.</li>
+							<li><b>Family pays:</b> gross fee ${money(c.fortnightFee)} − subsidy ${money(c.fortnightSub)} = <b>${money(c.gap)} / fortnight</b></li>
 						</ol>
-					</details>`;
+					</div>`;
 				})}
 				<div class="ex-block">
 					<h4>${res.children.length + 2} · Family totals (per fortnight)</h4>
@@ -660,7 +849,7 @@
 					</ul>
 				</div>` : null}
 			</div>
-		</div>`;
+		</details>`;
 	}
 
 	/* ---------------- Auth: login, no-access, settings ---------------- */
@@ -729,7 +918,7 @@
 				setBusy(false);
 				// Changing the password rotates the session token, which invalidates
 				// the REST nonce this page was rendered with. Reload for a fresh one,
-				// as login and logout do — without it every later call 403s.
+				// as login and logout do, without it every later call 403s.
 				if (r.ok && r.body.ok) { setMsg('Password changed. Reloading…'); setCur(''); setNp(''); setCp(''); window.setTimeout(function () { window.location.reload(); }, 1200); } else { setErr((r.body && r.body.message) || 'Could not change password.'); }
 			});
 		}

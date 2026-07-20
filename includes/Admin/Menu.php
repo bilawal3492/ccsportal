@@ -66,7 +66,7 @@ class Menu {
         ?>
         <div class="wrap ccsp-wrap">
             <h1 class="ccsp-title">Centre CCS Portal <span class="ccsp-ver">v<?php echo esc_html(CCSP_VERSION); ?></span></h1>
-            <p class="ccsp-sub">Internal subsidy &amp; fee estimation tool across all centres — reusing the certified CCS engine, so the maths matches the public calculator exactly.</p>
+            <p class="ccsp-sub">Internal subsidy &amp; fee estimation tool across all centres, reusing the certified CCS engine, so the maths matches the public calculator exactly.</p>
             <?php
             $page_id = (int) get_option('ccsp_portal_page_id');
             $app_id  = (int) get_option('ccsp_app_page_id');
@@ -97,22 +97,22 @@ class Menu {
                             <?php if ($engine_ok) : ?>
                                 <span class="ccsp-badge ok">Connected</span> <code><?php echo esc_html(CCSP_ENGINE_CLASS); ?></code>
                             <?php else : ?>
-                                <span class="ccsp-badge bad">Not found</span> — activate <em>The Child Care Subsidy Calculator</em> plugin.
+                                <span class="ccsp-badge bad">Not found</span>, activate <em>The Child Care Subsidy Calculator</em> plugin.
                             <?php endif; ?>
                         </td>
                     </tr>
-                    <tr><td>Database schema</td><td><span class="ccsp-badge ok">v<?php echo esc_html(get_option('ccsp_db_version', '—')); ?></span> — <?php echo count(Install::TABLES); ?> tables installed</td></tr>
+                    <tr><td>Database schema</td><td><span class="ccsp-badge ok">v<?php echo esc_html(get_option('ccsp_db_version', '-')); ?></span>, <?php echo count(Install::TABLES); ?> tables installed</td></tr>
                     <tr><td>Centre Manager role</td><td><?php echo get_role(Install::ROLE_MANAGER) ? '<span class="ccsp-badge ok">Registered</span>' : '<span class="ccsp-badge bad">Missing</span>'; ?></td></tr>
                 </tbody>
             </table>
 
             <h2>Build progress</h2>
             <ol class="ccsp-roadmap">
-                <li class="done"><strong>Phase 0 — Foundation</strong> · plugin, database, roles, seeded data, engine wiring</li>
-                <li class="done"><strong>Phase 1 — Admin CRUD</strong> · centres, fees, promotions, managers, brands + audit log</li>
-                <li><strong>Phase 2 — Calculator</strong> · one-screen manager app computing CCS via the shared engine over REST</li>
-                <li><strong>Phase 3 — Outputs</strong> · branded email + server-rendered PDF estimates</li>
-                <li><strong>Phase 4 — Reporting</strong> · leads, promotions used, revenue, conversion</li>
+                <li class="done"><strong>Phase 0, Foundation</strong> · plugin, database, roles, seeded data, engine wiring</li>
+                <li class="done"><strong>Phase 1, Admin CRUD</strong> · centres, fees, promotions, managers, brands + audit log</li>
+                <li><strong>Phase 2, Calculator</strong> · one-screen manager app computing CCS via the shared engine over REST</li>
+                <li><strong>Phase 3, Outputs</strong> · branded email + server-rendered PDF estimates</li>
+                <li><strong>Phase 4, Reporting</strong> · leads, promotions used, revenue, conversion</li>
             </ol>
         </div>
         <?php

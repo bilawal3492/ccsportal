@@ -216,7 +216,7 @@ class AppApi {
             'conversion'       => $conversion,
             'weekly_fees'      => round($weekly_fee_sum, 2),
             'annual_fees'      => round($weekly_fee_sum * 52, 2),
-            'promotions_used'  => array_map(function ($p) { return ['name' => $p->name ?: '—', 'count' => (int) $p->n]; }, $promo),
+            'promotions_used'  => array_map(function ($p) { return ['name' => $p->name ?: '-', 'count' => (int) $p->n]; }, $promo),
         ], 200);
     }
 

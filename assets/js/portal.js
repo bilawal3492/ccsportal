@@ -1,4 +1,4 @@
-/* Centre CCS Portal — front-end app.
+/* Centre CCS Portal, front-end app.
  * No subsidy maths here: every figure comes from the shared PHP engine via
  * POST /ccsp/v1/calculate. This file only gathers input, calls the API, and
  * renders the result. */
@@ -27,8 +27,8 @@
 				'<label class="fld">Fee override<input type="number" class="c_fee" min="0" step="0.01" placeholder="auto"></label>' +
 			'</div>' +
 			'<div class="fld-row">' +
-				'<label class="fld">Days — week 1<input type="number" class="c_d1" min="0" max="7" step="1" value="0"></label>' +
-				'<label class="fld">Days — week 2<input type="number" class="c_d2" min="0" max="7" step="1" value="0"></label>' +
+				'<label class="fld">Days, week 1<input type="number" class="c_d1" min="0" max="7" step="1" value="0"></label>' +
+				'<label class="fld">Days, week 2<input type="number" class="c_d2" min="0" max="7" step="1" value="0"></label>' +
 			'</div>' +
 		'</div>';
 	}
@@ -226,7 +226,7 @@
 		var sel = $('ccsp-centre');
 		CFG.centres.forEach(function (c) {
 			var o = document.createElement('option');
-			o.value = c.id; o.textContent = c.brand_name + ' — ' + c.name;
+			o.value = c.id; o.textContent = c.brand_name + ' · ' + c.name;
 			sel.appendChild(o);
 		});
 		addChild();

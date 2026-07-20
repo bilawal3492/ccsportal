@@ -341,7 +341,7 @@ class AdminApi {
             return new WP_Error('ccsp_bad_email', 'A valid email is required.', ['status' => 400]);
         }
         if (email_exists($email)) {
-            return new WP_Error('ccsp_email_exists', 'A user with that email already exists — assign them below instead.', ['status' => 409]);
+            return new WP_Error('ccsp_email_exists', 'A user with that email already exists, assign them below instead.', ['status' => 409]);
         }
         $username = sanitize_user(current(explode('@', $email)), true);
         if (username_exists($username)) { $username .= '_' . wp_generate_password(4, false); }

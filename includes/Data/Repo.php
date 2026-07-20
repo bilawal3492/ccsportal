@@ -58,11 +58,11 @@ class Repo {
         return $wpdb->get_row($wpdb->prepare("SELECT * FROM $t WHERE id = %d", $id));
     }
 
-    /** [id => "Brand — Centre"] for select boxes. */
+    /** [id => "Brand, Centre"] for select boxes. */
     public static function centre_options($only_active = false) {
         $out = [];
         foreach (self::centres($only_active) as $c) {
-            $out[(int) $c->id] = trim(($c->brand_name ? $c->brand_name . ' — ' : '') . $c->name);
+            $out[(int) $c->id] = trim(($c->brand_name ? $c->brand_name . ' · ' : '') . $c->name);
         }
         return $out;
     }

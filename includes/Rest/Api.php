@@ -142,7 +142,7 @@ class Api {
             'withholding'  => (float) $tf['withholding'],
         ];
 
-        // Promotion pricing — applied to the parent GAP, after subsidy.
+        // Promotion pricing, applied to the parent GAP, after subsidy.
         $promo = $this->price_promotion(
             (int) $req->get_param('promotion_id'),
             $centre_id,
@@ -283,7 +283,7 @@ class Api {
     /**
      * Build the comparison + best-value data. Each pricing structure is
      * evaluated INDEPENDENTLY:
-     *   - by_days:  attendance packages (2/3/4/5) — always the standard/package
+     *   - by_days:  attendance packages (2/3/4/5), always the standard/package
      *               day-rates, never affected by the selected fee basis.
      *   - by_basis: standard daily vs weekly vs WindBack, each on its own rate.
      *   - by_promo: every offer on the currently-selected basis.
@@ -294,9 +294,9 @@ class Api {
             return ['by_days' => [], 'by_basis' => [], 'by_promo' => [], 'best' => null];
         }
 
-        // Attendance packages — ALWAYS standard/package pricing (independent of basis).
+        // Attendance packages, ALWAYS standard/package pricing (independent of basis).
         $by_days = [];
-        foreach ([2, 3, 4, 5] as $d) {
+        foreach ([1, 2, 3, 4, 5] as $d) {
             $cp = array_map(function ($c) use ($d) {
                 $c['days_week1'] = $d; $c['days_week2'] = $d; $c['fee_override'] = '';
                 return $c;
@@ -305,8 +305,10 @@ class Api {
             $by_days[] = ['days' => $d, 'weekly_fee' => $s['weekly_fee'], 'weekly_gap' => $s['weekly_gap']];
         }
 
-        // Grid: each fee basis × each promotion (incl. none) at the actual attendance.
-        $bases = ['standard' => 'Standard daily', 'weekly' => 'Weekly rate', 'windback' => 'WindBack rate'];
+        // Grid: fee basis × each promotion (incl. none) at the actual attendance.
+        // Only the day-tier ("standard") basis is offered; weekly/WindBack pricing
+        // was retired, so those bases are no longer computed or compared.
+        $bases = ['standard' => 'Standard daily'];
         $promo_list = Repo::promotions_for_centre($centre_id);
         $grid = [];
         foreach ($bases as $b => $bl) {
@@ -411,7 +413,7 @@ class Api {
                 $ongoing = true;
                 $weekly_saving = $weekly_gap / self::FREE_WEEK_INTERVAL;
                 $total_value = $value * $weekly_gap;
-                $desc = $n . ' weeks free — 1 free week every ' . self::FREE_WEEK_INTERVAL
+                $desc = $n . ' weeks free, 1 free week every ' . self::FREE_WEEK_INTERVAL
                     . ' weeks (' . self::money($weekly_saving) . '/wk effective, ' . self::money($total_value) . ' total value)';
                 break;
             case 'percent':
@@ -432,7 +434,7 @@ class Api {
                 $desc = $n . '% off each additional child\'s daily fee (applied before CCS).';
                 break;
             case 'oneoff':
-                // One-off credit (e.g. refer a friend) — subtracted once from the total.
+                // One-off credit (e.g. refer a friend), subtracted once from the total.
                 $oneoff = $value;
                 $total_value = $value;
                 $desc = self::money($value) . ' one-off credit.';

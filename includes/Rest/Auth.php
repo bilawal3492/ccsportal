@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Custom authentication for the standalone React admin — so staff never touch
+ * Custom authentication for the standalone React admin, so staff never touch
  * wp-login or wp-admin. Login sets the normal WordPress auth cookie (same
  * session mechanism), gated by the portal capability. Account changes
  * (name / email / password) and logout all happen in-app.
@@ -126,7 +126,7 @@ class Auth {
             return new WP_Error('ccsp_account', $res->get_error_message(), ['status' => 400]);
         }
 
-        // Changing the password rotates session tokens — keep this session alive.
+        // Changing the password rotates session tokens, keep this session alive.
         if (isset($data['user_pass'])) {
             wp_set_auth_cookie($user->ID, true, is_ssl());
         }

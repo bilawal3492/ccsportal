@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 /**
  * Renders the portal app and the calculator as full-screen, standalone
- * documents that bypass the site theme entirely — so the portal looks and
+ * documents that bypass the site theme entirely, so the portal looks and
  * behaves like a dedicated SaaS application rather than a page inside the site.
  */
 class FullScreen {
@@ -34,7 +34,7 @@ class FullScreen {
     }
 
     private function render($type) {
-        // The app renders for everyone — the React app shows its own custom
+        // The app renders for everyone, the React app shows its own custom
         // login screen when the visitor is not authenticated (no wp-login).
         if ($type === 'app') {
             $this->render_app();

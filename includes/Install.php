@@ -72,10 +72,10 @@ class Install {
      */
     public static function ensure_portal_page() {
         if (!function_exists('wp_insert_post')) {
-            return 0; // pluggable API not ready — try again on a later admin_init.
+            return 0; // pluggable API not ready, try again on a later admin_init.
         }
         self::ensure_shortcode_page('ccs_portal', 'Centre CCS Portal', 'centre-ccs-portal', 'ccsp_portal_page_id');
-        self::ensure_shortcode_page('ccs_portal_app', 'Centre CCS Portal — App', 'centre-ccs-portal-app', 'ccsp_app_page_id');
+        self::ensure_shortcode_page('ccs_portal_app', 'Centre CCS Portal, App', 'centre-ccs-portal-app', 'ccsp_app_page_id');
         return (int) get_option('ccsp_portal_page_id');
     }
 
@@ -139,7 +139,7 @@ class Install {
     /**
      * Correct the v1 placeholder centre names to their real suburbs.
      *
-     * Only for upgrades from db_version 1 — call sites must gate on that.
+     * Only for upgrades from db_version 1, call sites must gate on that.
      * It overwrites `name` by `code`, so running it on a current install
      * silently reverts any centre an admin has renamed.
      */

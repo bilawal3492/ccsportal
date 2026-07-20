@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Brands — name, accent colour, logo and the email identity used on branded
+ * Brands, name, accent colour, logo and the email identity used on branded
  * estimates. Three brands ship seeded; this screen keeps them editable.
  */
 class BrandsController {
