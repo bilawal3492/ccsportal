@@ -3,6 +3,7 @@ namespace CCSPortal\Rest;
 
 use CCSPortal\Install;
 use CCSPortal\Data\Repo;
+use CCSPortal\Admin\Audit;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -462,24 +463,42 @@ class Api {
         if (!$centre_id || !Repo::can_access_centre($centre_id)) {
             return new WP_Error('ccsp_forbidden_centre', 'You do not have access to that centre.', ['status' => 403]);
         }
-        $inputs  = $req->get_param('inputs');
-        $results = $req->get_param('results');
-
-        $wpdb->insert(Install::table('calculations'), [
+        $t = Install::table('calculations');
+        $data = [
             'centre_id'    => $centre_id,
-            'manager_id'   => get_current_user_id(),
             'parent_name'  => sanitize_text_field($req->get_param('parent_name')),
             'parent_email' => sanitize_email($req->get_param('parent_email')),
             'parent_phone' => sanitize_text_field($req->get_param('parent_phone')),
             'income'       => (float) $req->get_param('income'),
             'ccs_pct'      => (float) $req->get_param('ccs_pct'),
             'promotion_id' => (int) $req->get_param('promotion_id'),
-            'inputs_json'  => wp_json_encode($inputs),
-            'results_json' => wp_json_encode($results),
-            'status'       => 'new',
-            'created_at'   => current_time('mysql'),
-        ]);
+            'inputs_json'  => wp_json_encode($req->get_param('inputs')),
+            'results_json' => wp_json_encode($req->get_param('results')),
+        ];
 
-        return new WP_REST_Response(['ok' => true, 'id' => (int) $wpdb->insert_id], 201);
+        // Editing an existing estimate: update in place, keeping its status,
+        // owner and created date. Only the owner (or a portal admin) may edit.
+        $id = (int) $req->get_param('id');
+        if ($id) {
+            $row = $wpdb->get_row($wpdb->prepare("SELECT manager_id FROM $t WHERE id = %d", $id));
+            if (!$row) {
+                return new WP_Error('ccsp_not_found', 'Estimate not found.', ['status' => 404]);
+            }
+            $is_super = current_user_can('ccsp_manage_portal') || current_user_can('manage_options');
+            if (!$is_super && (int) $row->manager_id !== get_current_user_id()) {
+                return new WP_Error('ccsp_forbidden', 'You can only edit your own saved estimates.', ['status' => 403]);
+            }
+            $wpdb->update($t, $data, ['id' => $id]);
+            Audit::log('estimate', $id, 'update', null, ['name' => $data['parent_name']]);
+            return new WP_REST_Response(['ok' => true, 'id' => $id, 'updated' => true], 200);
+        }
+
+        $data['manager_id'] = get_current_user_id();
+        $data['status']     = 'new';
+        $data['created_at'] = current_time('mysql');
+        $wpdb->insert($t, $data);
+        $new_id = (int) $wpdb->insert_id;
+        Audit::log('estimate', $new_id, 'create', null, ['name' => $data['parent_name']]);
+        return new WP_REST_Response(['ok' => true, 'id' => $new_id], 201);
     }
 }

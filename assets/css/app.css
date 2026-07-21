@@ -11,7 +11,17 @@
 }
 .ccsp-app-root *, .ccsp-app-root *::before, .ccsp-app-root *::after { box-sizing: border-box; }
 .ccsp-app-root code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background: var(--sunken); padding: 1px 6px; border-radius: 5px; }
-.ccsp-app-loading, .ccsp-app-root .loading { padding: 40px; color: var(--muted); }
+/* Branded, centred loading state (used before React mounts and by every in-app loader). */
+.ccsp-app-loading, .ccsp-app-root .loading, .ccsp-app-root .loader {
+	display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+	min-height: 60vh; padding: 40px; color: var(--muted);
+	font-family: "Red Hat Display", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.ccsp-app-loading .loader-mark, .ccsp-app-root .loader .loader-mark { color: var(--brand-blue); animation: ccsp-loadpulse 1.3s ease-in-out infinite; }
+.ccsp-app-loading .loader-mark svg, .ccsp-app-root .loader .loader-mark svg { display: block; }
+.ccsp-app-loading .loader-txt, .ccsp-app-root .loader .loader-txt { font-size: 13px; font-weight: 600; letter-spacing: .01em; }
+@keyframes ccsp-loadpulse { 0%, 100% { opacity: .4; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .ccsp-app-loading .loader-mark, .ccsp-app-root .loader .loader-mark { animation: none; } }
 .ccsp-app-gate { max-width: 420px; margin: 60px auto; background: #fff; border: 1px solid #e6e8ef; border-radius: 14px; padding: 32px; text-align: center; font-family: -apple-system, "Segoe UI", sans-serif; }
 
 /* Full-screen shell */
@@ -37,7 +47,7 @@
 .ccsp-app-root .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ccsp-app-root .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px;
 	background: rgba(255,255,255,.85); backdrop-filter: saturate(1.4) blur(8px); -webkit-backdrop-filter: saturate(1.4) blur(8px);
-	border-bottom: 1px solid var(--line); padding: 13px 30px; min-height: 62px; }
+	border-bottom: 1px solid var(--line); padding: 16px 30px; min-height: 62px; }
 .ccsp-app-root .topbar-title { font-size: 16px; font-weight: 700; margin: 0; }
 .ccsp-app-root .topbar-actions { display: flex; align-items: center; gap: 14px; }
 .ccsp-app-root .btni { display: inline-flex; vertical-align: middle; margin-right: 2px; }
@@ -47,8 +57,10 @@
 .ccsp-app-root .uc-meta strong { display: block; font-size: 13px; font-weight: 700; } .ccsp-app-root .uc-meta span { display: block; font-size: 11px; color: var(--muted); }
 @media (max-width: 620px) { .ccsp-app-root .uc-meta { display: none; } }
 .ccsp-app-root .content { padding: 26px 30px 60px; flex: 1; width: 100%; }
-.ccsp-app-root .content > div { max-width: 1180px; }
-.ccsp-app-root .content > .calc-page { max-width: none; }
+/* Every page fills the available width; the .content side padding is the gutter. */
+.ccsp-app-root .content > div { max-width: none; width: 100%; }
+/* Wider gutters on large monitors so full-width pages stay balanced. */
+@media (min-width: 1600px) { .ccsp-app-root .content { padding-left: 48px; padding-right: 48px; } }
 
 /* Headings & cards */
 .ccsp-app-root .page-h { font-size: 25px; font-weight: 800; letter-spacing: -.025em; margin: 0 0 18px; }
@@ -102,7 +114,19 @@
 .ccsp-app-root .link { border: none; background: none; color: var(--accent); font-weight: 600; font-size: 13px; padding: 0 0 8px; cursor: pointer; }
 
 /* Table */
-.ccsp-app-root .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.ccsp-app-root .tablewrap { overflow-x: auto;}
+.ccsp-app-root th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.ccsp-app-root th.sortable:hover { color: var(--ink); }
+.ccsp-app-root th.sortable.sorted { color: var(--brand-blue); }
+.ccsp-app-root .sort-ar { font-size: 11px; color: var(--faint); }
+.ccsp-app-root th.sortable:hover .sort-ar { color: var(--muted); }
+.ccsp-app-root .sort-ar.on { color: var(--brand-blue); }
+.ccsp-app-root .ctr-filter { padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; font-size: 14px; background: var(--surface); color: var(--ink); font-family: inherit; }
+.ccsp-app-root .log-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.ccsp-app-root .log-filters .log-search { flex: 1; min-width: 160px; }
+.ccsp-app-root .log-when { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.ccsp-app-root .log-detail { font-size: 12.5px; max-width: 420px; }
+.ccsp-app-root .log-more { text-align: center; margin-top: 14px; }
 .ccsp-app-root .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 640px; }
 .ccsp-app-root .tbl th { text-align: left; padding: 11px 15px; background: var(--sunken); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
 .ccsp-app-root .tbl td { padding: 12px 15px; border-top: 1px solid var(--line); vertical-align: middle; }
@@ -129,6 +153,7 @@
 .ccsp-app-root .sbtn.active.st-enrolled { background: var(--enrolled); } .ccsp-app-root .sbtn.active.st-lost { background: var(--lost); }
 
 /* Lead detail (premium) */
+.ccsp-app-root .lead-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ccsp-app-root .lead-hero { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 	background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 22px; margin-bottom: 16px; }
 .ccsp-app-root .lead-id { display: flex; align-items: center; gap: 15px; min-width: 0; }
@@ -187,6 +212,8 @@
 /* Forms */
 .ccsp-app-root .formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
 .ccsp-app-root .formgrid.three { grid-template-columns: repeat(3, 1fr); }
+.ccsp-app-root .calc-atsi { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; font-weight: 600; margin: 2px 0 4px; cursor: pointer; }
+.ccsp-app-root .calc-atsi input { margin-top: 2px; }
 .ccsp-app-root .cd-row { display: grid; grid-template-columns: 1fr 1fr 1.7fr; gap: 12px 16px; align-items: end; }
 .ccsp-app-root .cd-feecell { align-self: end; }
 .ccsp-app-root .fee-box { width: 100%; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--sunken); display: flex; align-items: center; gap: 8px; font-size: 14px; min-height: 40px; }
@@ -215,6 +242,7 @@
 .ccsp-app-root .scrollbox { max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: 9px; padding: 6px 12px; background: #fbfcfe; }
 .ccsp-app-root .formactions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .ccsp-app-root .formerr { color: var(--lost); font-size: 13px; font-weight: 600; }
+.ccsp-app-root .formok { color: var(--enrolled, #2e7d32); font-size: 13px; font-weight: 600; }
 
 /* Manager rows */
 .ccsp-app-root .mrow { padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -222,6 +250,101 @@
 .ccsp-app-root .mrow-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .ccsp-app-root .mrow-centres { font-size: 12px; margin-top: 4px; }
 .ccsp-app-root .mrow-edit { margin-top: 10px; padding: 10px; background: var(--sunken); border-radius: 10px; }
+.ccsp-app-root .pw-set { display: flex; flex-direction: column; gap: 8px; }
+.ccsp-app-root .pw-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ccsp-app-root .pw-input { flex: 1 1 200px; min-width: 160px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+
+/* Role badges */
+.ccsp-app-root .rbadge { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; vertical-align: middle; margin-left: 2px; }
+.ccsp-app-root .rbadge.admin { background: rgba(92,132,180,.14); color: var(--brand-blue); }
+.ccsp-app-root .rbadge.mgr { background: rgba(95,156,51,.14); color: var(--good); }
+.ccsp-app-root .rbadge.you { background: var(--sunken); color: var(--muted); margin-left: 6px; }
+
+/* Role picker (radio cards) */
+.ccsp-app-root .rolepick { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 12px; }
+.ccsp-app-root .rolopt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--surface); }
+.ccsp-app-root .rolopt.on { border-color: var(--brand-blue); box-shadow: 0 0 0 1px var(--brand-blue) inset; }
+.ccsp-app-root .rolopt input { margin-top: 3px; }
+.ccsp-app-root .rolopt-t { display: flex; flex-direction: column; gap: 2px; }
+.ccsp-app-root .rolopt-l { font-weight: 700; font-size: 14px; }
+.ccsp-app-root .rolopt-h { font-size: 12px; color: var(--muted); }
+
+/* Brand-wise centre picker */
+.ccsp-app-root .brandpick { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 12px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.ccsp-app-root .brandgrp { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.ccsp-app-root .brandgrp-h { display: flex; justify-content: space-between; align-items: center; padding: 7px 11px; background: var(--sunken); font-weight: 700; font-size: 12px; letter-spacing: .02em; }
+.ccsp-app-root .brandgrp-items { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 12px; }
+.ccsp-app-root .linkbtn { background: none; border: none; color: var(--brand-blue); font-weight: 600; font-size: 12px; cursor: pointer; padding: 0; }
+.ccsp-app-root .linkbtn:hover { text-decoration: underline; }
+
+/* Testing scenarios */
+.ccsp-app-root .tprog { margin-top: 4px; }
+.ccsp-app-root .tprog-bar { height: 8px; border-radius: 999px; background: var(--sunken); overflow: hidden; }
+.ccsp-app-root .tprog-fill { height: 100%; background: linear-gradient(90deg, var(--brand-green), var(--good)); border-radius: 999px; transition: width .3s ease; }
+.ccsp-app-root .tprog-lab { font-size: 12.5px; color: var(--muted); margin-top: 8px; font-weight: 600; }
+.ccsp-app-root .tprog-iss { color: var(--contacted); }
+.ccsp-app-root .scenario-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ccsp-app-root .scenario-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; font-size: 13.5px; line-height: 1.5; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.ccsp-app-root .scenario-list li:last-child { border-bottom: none; }
+.ccsp-app-root .sc-main { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ccsp-app-root .sc-txt { flex: 1; min-width: 60%; }
+.ccsp-app-root .sc-row.sc-pass .sc-txt { color: var(--ink); }
+.ccsp-app-root .sc-badge { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; text-transform: uppercase; letter-spacing: .03em; }
+.ccsp-app-root .sc-badge.unavailable { background: rgba(176,42,26,.1); color: var(--lost); }
+.ccsp-app-root .sc-badge.setup { background: rgba(207,111,40,.14); color: var(--contacted); }
+.ccsp-app-root .sc-actions { flex-shrink: 0; display: flex; gap: 6px; }
+.ccsp-app-root .sc-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; color: var(--muted); }
+.ccsp-app-root .sc-btn.works.on { background: var(--good); border-color: var(--good); color: #fff; }
+.ccsp-app-root .sc-btn.issue:hover { border-color: var(--contacted); color: var(--contacted); }
+.ccsp-app-root .sc-btn.issue.on { background: var(--contacted); border-color: var(--contacted); color: #fff; }
+.ccsp-app-root .sc-mark { font-size: 12px; font-weight: 700; white-space: nowrap; }
+.ccsp-app-root .sc-mark.pass { color: var(--good); }
+.ccsp-app-root .sc-mark.issue { color: var(--contacted); }
+.ccsp-app-root .sc-mark.none { color: var(--faint); font-weight: 500; }
+.ccsp-app-root .tbl tr.sel { background: rgba(92,132,180,.08); }
+@media (max-width: 640px) { .ccsp-app-root .scenario-list li { flex-direction: column; gap: 8px; } }
+
+/* Portal welcome tour (coach-marks) */
+.ccsp-app-root .tour-anchor { position: fixed; inset: 0; z-index: 300; }
+.ccsp-app-root .tour-backdrop { position: fixed; inset: 0; background: rgba(16,20,28,.55); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+.ccsp-app-root .tour-centered { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+/* Spotlight: transparent box over the target with a glowing ring and a huge shadow that dims everything else. */
+.ccsp-app-root .tour-spot { position: fixed; border-radius: 10px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(16,20,28,.55), 0 0 0 3px var(--brand-blue), 0 0 0 7px rgba(92,132,180,.35); transition: all .2s ease; }
+.ccsp-app-root .tour-modal, .ccsp-app-root .tour-tip { background: var(--surface); border-radius: 16px; box-shadow: 0 20px 60px rgba(16,20,28,.35); padding: 20px 22px 16px; width: 100%; max-width: 320px; }
+.ccsp-app-root .tour-modal { position: relative; max-width: 420px; padding: 24px 26px 18px; }
+.ccsp-app-root .tour-tip { position: fixed; }
+.ccsp-app-root .tour-x { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 22px; line-height: 1; color: var(--faint); cursor: pointer; }
+.ccsp-app-root .tour-x:hover { color: var(--muted); }
+.ccsp-app-root .tour-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.ccsp-app-root .tour-ic { width: 42px; height: 42px; flex-shrink: 0; border-radius: 12px; background: linear-gradient(150deg, var(--accent), var(--accent-2)); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(92,132,180,.35); }
+.ccsp-app-root .tour-step { font-size: 10.5px; font-weight: 800; color: var(--faint); text-transform: uppercase; letter-spacing: .07em; }
+.ccsp-app-root .tour-title { font-size: 17px; font-weight: 800; letter-spacing: -.02em; margin: 1px 0 0; }
+.ccsp-app-root .tour-body { font-size: 13.5px; line-height: 1.55; color: var(--ink-2); margin: 0 0 14px; }
+.ccsp-app-root .tour-dots { display: flex; gap: 6px; margin: 12px 0 14px; flex-wrap: wrap; }
+.ccsp-app-root .tour-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); cursor: pointer; transition: background .2s, width .2s; }
+.ccsp-app-root .tour-dot.on { background: var(--brand-blue); width: 18px; border-radius: 999px; }
+.ccsp-app-root .tour-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.ccsp-app-root .tour-nav-r { display: flex; align-items: center; gap: 12px; }
+.ccsp-app-root .tour-skip { padding: 0; font-size: 13px; color: var(--muted); }
+
+/* Feedback */
+.ccsp-app-root .fb-row { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.ccsp-app-root .fb-row:last-child { margin-bottom: 0; }
+.ccsp-app-root .fb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ccsp-app-root .fb-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.ccsp-app-root .fb-who { font-size: 11px; font-weight: 700; color: var(--brand-blue); background: rgba(92,132,180,.12); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ccsp-app-root .fb-filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.ccsp-app-root .fb-filters .ctr-filter { flex: 1; min-width: 150px; }
+.ccsp-app-root .fb-scenario { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.ccsp-app-root .fb-msg { font-size: 13.5px; line-height: 1.55; margin-top: 8px; white-space: pre-line; }
+.ccsp-app-root .fb-note { font-size: 12.5px; margin-top: 8px; padding: 8px 10px; background: var(--sunken); border-radius: 8px; }
+.ccsp-app-root .fb-admin { margin-top: 10px; }
+.ccsp-app-root .fb-edit { padding: 10px; background: var(--sunken); border-radius: 10px; }
+.ccsp-app-root .fb-status { flex-shrink: 0; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.ccsp-app-root .fb-new { background: rgba(92,132,180,.14); color: var(--brand-blue); }
+.ccsp-app-root .fb-reviewing { background: rgba(207,111,40,.16); color: var(--contacted); }
+.ccsp-app-root .fb-resolved { background: rgba(95,156,51,.16); color: var(--good); }
+.ccsp-app-root .fb-wontfix { background: var(--sunken); color: var(--muted); }
 
 /* Calculator (in-app) */
 .ccsp-app-root .calc-centre { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
@@ -395,6 +518,16 @@
 .login-card { width: 100%; max-width: 384px; background: #fff; border: 1px solid #e6e8ef; border-radius: 18px; box-shadow: 0 12px 44px rgba(16,20,28,.12); padding: 34px 30px; text-align: center; display: flex; flex-direction: column; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: #171a20; box-sizing: border-box; }
 .login-card * { box-sizing: border-box; }
 .login-mark { width: 54px; height: 54px; border-radius: 15px; background: linear-gradient(150deg, #5C84B4, #47688f); color: #fff; display: grid; place-items: center; margin: 0 auto 12px; box-shadow: 0 8px 22px rgba(92,132,180,.35); }
+/* i9 Education logo: light variant by default, dark variant swaps in dark mode. */
+.i9logo { display: block; }
+.i9logo img { display: block; height: auto; }
+.i9logo .i9logo-dark { display: none; }
+.login-logo { margin: 2px auto 16px; }
+.login-logo img { width: 230px; max-width: 62%; margin: 0 auto; }
+@media (prefers-color-scheme: dark) {
+	.i9logo .i9logo-light { display: none; }
+	.i9logo .i9logo-dark { display: block; }
+}
 .login-h { font-size: 21px; font-weight: 800; margin: 0 0 4px; letter-spacing: -.02em; }
 .login-sub { font-size: 13.5px; color: #6a7078; margin: 0 0 18px; line-height: 1.5; }
 .login-card .f { text-align: left; display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; font-size: 12.5px; font-weight: 600; color: #3b4048; }

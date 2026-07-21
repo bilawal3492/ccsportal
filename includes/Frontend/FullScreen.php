@@ -57,14 +57,15 @@ class FullScreen {
     }
 
     private function render_app() {
-        $body = '<div id="ccsp-app-root" class="ccsp-app-root"><div class="ccsp-app-loading">Loading portal…</div></div>';
+        $body = '<div id="ccsp-app-root" class="ccsp-app-root">' . PortalApp::loading_markup('Loading portal…') . '</div>';
         $scripts = $this->script_tag('assets/vendor/react.production.min.js')
             . $this->script_tag('assets/vendor/react-dom.production.min.js')
             . $this->script_tag('assets/vendor/htm.umd.js')
             . $this->script_tag('assets/js/app.js');
         $data = [
-            'root'  => esc_url_raw(rest_url('ccsp/v1/')),
-            'nonce' => wp_create_nonce('wp_rest'),
+            'root'   => esc_url_raw(rest_url('ccsp/v1/')),
+            'nonce'  => wp_create_nonce('wp_rest'),
+            'assets' => esc_url_raw(CCSP_URL . 'assets/'),
         ];
         $this->document('Centre CCS Portal', $body, 'app.css', $data, $scripts, 'CCSP_APP');
     }
@@ -104,6 +105,7 @@ class FullScreen {
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
     <title><?php echo esc_html($title); ?></title>
+    <link rel="icon" type="image/svg+xml" href="<?php echo esc_url(CCSP_URL . 'assets/img/i9-mark.svg?ver=' . CCSP_VERSION); ?>">
     <?php if ($css) : ?>
     <link rel="stylesheet" href="<?php echo esc_url(CCSP_URL . 'assets/css/' . $css . '?ver=' . CCSP_VERSION); ?>">
     <?php endif; ?>

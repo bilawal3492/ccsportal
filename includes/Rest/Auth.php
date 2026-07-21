@@ -1,6 +1,7 @@
 <?php
 namespace CCSPortal\Rest;
 
+use CCSPortal\Admin\Audit;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -74,6 +75,7 @@ class Auth {
         wp_set_current_user($user->ID);
         wp_set_auth_cookie($user->ID, true, is_ssl());
 
+        Audit::log('session', $user->ID, 'login', null, null);
         return new WP_REST_Response(['ok' => true], 200);
     }
 
@@ -125,6 +127,12 @@ class Auth {
         if (is_wp_error($res)) {
             return new WP_Error('ccsp_account', $res->get_error_message(), ['status' => 400]);
         }
+
+        $changed = [];
+        if (isset($data['display_name'])) { $changed[] = 'name'; }
+        if (isset($data['user_email']))   { $changed[] = 'email'; }
+        if (isset($data['user_pass']))    { $changed[] = 'password'; }
+        Audit::log('account', $user->ID, 'update', null, ['changed' => $changed]);
 
         // Changing the password rotates session tokens, keep this session alive.
         if (isset($data['user_pass'])) {

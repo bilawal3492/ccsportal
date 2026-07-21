@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Centre CCS Portal
  * Description: Internal CCS administration portal for Centre Managers, centre fees, subsidy estimates, promotions, and branded estimates across all centres. Reuses the CCS engine from The Child Care Subsidy Calculator (single source of truth, no duplicated logic).
- * Version: 0.10.21
+ * Version: 0.16.4
  * Author: i9 Education
  * Author URI: https://i9.edu.au/
  * License: GPLv2 or later
@@ -25,10 +25,10 @@ if (version_compare(PHP_VERSION, '7.4', '<')) {
 }
 
 // Paths & version.
-if (!defined('CCSP_VERSION'))  define('CCSP_VERSION', '0.10.21');
+if (!defined('CCSP_VERSION'))  define('CCSP_VERSION', '0.16.4');
 if (!defined('CCSP_DIR'))      define('CCSP_DIR', plugin_dir_path(__FILE__));
 if (!defined('CCSP_URL'))      define('CCSP_URL', plugin_dir_url(__FILE__));
-if (!defined('CCSP_DB_VERSION')) define('CCSP_DB_VERSION', '5');
+if (!defined('CCSP_DB_VERSION')) define('CCSP_DB_VERSION', '8');
 
 // Fully-qualified name of the shared CCS engine provided by the calculator plugin.
 if (!defined('CCSP_ENGINE_CLASS')) {
