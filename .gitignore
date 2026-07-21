@@ -1,3 +1,10 @@
 .DS_Store
 *.log
 Thumbs.db
+
+# AppleDouble sidecars. macOS writes these next to every edited file on
+# filesystems without native xattr support (exFAT), which is what this
+# repo lives on. They must never reach a release zip.
+._*
+.Spotlight-V100
+.Trashes

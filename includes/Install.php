@@ -23,13 +23,21 @@ class Install {
         'promotion_map',
         'calculations',
         'audit_log',
+        'feedback',
     ];
 
     /** Custom role for a centre-scoped manager. */
     const ROLE_MANAGER = 'ccsp_centre_manager';
 
+    /** Custom role for a full-access portal administrator (no wider WordPress access). */
+    const ROLE_ADMIN = 'ccsp_portal_admin';
+
+    /** Custom role for an area manager: edits fees + promotions for their assigned centres. */
+    const ROLE_AREA = 'ccsp_area_manager';
+
     /** Portal capabilities. */
     const CAPS_MANAGER = ['read', 'ccsp_use_portal', 'ccsp_view_records'];
+    const CAPS_AREA    = ['read', 'ccsp_use_portal', 'ccsp_view_records', 'ccsp_manage_fees', 'ccsp_manage_promotions', 'ccsp_view_reports'];
     const CAPS_ADMIN   = ['ccsp_use_portal', 'ccsp_view_records', 'ccsp_manage_fees', 'ccsp_manage_promotions', 'ccsp_manage_centres', 'ccsp_view_reports', 'ccsp_manage_portal'];
 
     /** Fully-qualified table name. */
@@ -51,10 +59,16 @@ class Install {
 
     /** Activation entry point. */
     public static function activate() {
+        $prev = get_option('ccsp_db_version'); // false on a fresh install.
         self::create_tables();
         self::add_roles();
         self::seed_data();
-        self::sync_centre_names();
+        // Legacy repair only. v1 seeded placeholder centre names; every seed
+        // since writes the real suburb, so running this on a current install
+        // would only overwrite names an admin has since edited.
+        if ($prev === '1') {
+            self::sync_centre_names();
+        }
         self::ensure_portal_page();
         update_option('ccsp_db_version', CCSP_DB_VERSION);
         update_option('ccsp_activated_at', current_time('mysql'));
@@ -66,10 +80,10 @@ class Install {
      */
     public static function ensure_portal_page() {
         if (!function_exists('wp_insert_post')) {
-            return 0; // pluggable API not ready — try again on a later admin_init.
+            return 0; // pluggable API not ready, try again on a later admin_init.
         }
         self::ensure_shortcode_page('ccs_portal', 'Centre CCS Portal', 'centre-ccs-portal', 'ccsp_portal_page_id');
-        self::ensure_shortcode_page('ccs_portal_app', 'Centre CCS Portal — App', 'centre-ccs-portal-app', 'ccsp_app_page_id');
+        self::ensure_shortcode_page('ccs_portal_app', 'Centre CCS Portal, App', 'centre-ccs-portal-app', 'ccsp_app_page_id');
         return (int) get_option('ccsp_portal_page_id');
     }
 
@@ -118,18 +132,24 @@ class Install {
 
     /** Run migrations when the plugin file is updated in place. */
     public static function maybe_upgrade() {
-        if (get_option('ccsp_db_version') !== CCSP_DB_VERSION) {
+        $prev = get_option('ccsp_db_version');
+        if ($prev !== CCSP_DB_VERSION) {
             self::create_tables();
             self::add_roles();
-            self::sync_centre_names();
+            if ($prev === '1') {
+                self::sync_centre_names();
+            }
             self::ensure_portal_page();
             update_option('ccsp_db_version', CCSP_DB_VERSION);
         }
     }
 
     /**
-     * Correct the seeded placeholder centre names to their real suburbs.
-     * Idempotent — safe to run repeatedly and only overwrites the codes listed.
+     * Correct the v1 placeholder centre names to their real suburbs.
+     *
+     * Only for upgrades from db_version 1, call sites must gate on that.
+     * It overwrites `name` by `code`, so running it on a current install
+     * silently reverts any centre an admin has renamed.
      */
     public static function sync_centre_names() {
         global $wpdb;
@@ -153,6 +173,7 @@ class Install {
         $promomap = self::table('promotion_map');
         $calcs    = self::table('calculations');
         $audit    = self::table('audit_log');
+        $feedback = self::table('feedback');
 
         $sql = [];
 
@@ -274,6 +295,24 @@ class Install {
             KEY user_id (user_id)
         ) $charset;";
 
+        $sql[] = "CREATE TABLE $feedback (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            user_name VARCHAR(191) NOT NULL DEFAULT '',
+            scenario VARCHAR(191) NOT NULL DEFAULT '',
+            category VARCHAR(30) NOT NULL DEFAULT 'other',
+            severity VARCHAR(20) NOT NULL DEFAULT 'medium',
+            subject VARCHAR(191) NOT NULL DEFAULT '',
+            message LONGTEXT,
+            status VARCHAR(20) NOT NULL DEFAULT 'new',
+            admin_note LONGTEXT,
+            created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+            updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+            PRIMARY KEY  (id),
+            KEY user_id (user_id),
+            KEY status (status)
+        ) $charset;";
+
         foreach ($sql as $statement) {
             dbDelta($statement);
         }
@@ -286,6 +325,14 @@ class Install {
             'Centre Manager',
             array_fill_keys(self::CAPS_MANAGER, true)
         );
+        // Portal Administrator: full portal access without granting site-wide
+        // WordPress administrator capabilities. 'read' lets them reach wp-admin
+        // profile if ever needed; everything else is portal-scoped.
+        add_role(
+            self::ROLE_ADMIN,
+            'Portal Administrator',
+            array_fill_keys(array_merge(['read'], self::CAPS_ADMIN), true)
+        );
         $admin = get_role('administrator');
         if ($admin) {
             foreach (self::CAPS_ADMIN as $cap) {
@@ -296,6 +343,23 @@ class Install {
         if ($manager) {
             foreach (self::CAPS_MANAGER as $cap) {
                 $manager->add_cap($cap);
+            }
+        }
+        $portal_admin = get_role(self::ROLE_ADMIN);
+        if ($portal_admin) {
+            foreach (array_merge(['read'], self::CAPS_ADMIN) as $cap) {
+                $portal_admin->add_cap($cap);
+            }
+        }
+        add_role(
+            self::ROLE_AREA,
+            'Area Manager',
+            array_fill_keys(self::CAPS_AREA, true)
+        );
+        $area = get_role(self::ROLE_AREA);
+        if ($area) {
+            foreach (self::CAPS_AREA as $cap) {
+                $area->add_cap($cap);
             }
         }
     }

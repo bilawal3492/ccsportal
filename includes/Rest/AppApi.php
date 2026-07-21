@@ -3,6 +3,7 @@ namespace CCSPortal\Rest;
 
 use CCSPortal\Install;
 use CCSPortal\Data\Repo;
+use CCSPortal\Admin\Audit;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -18,12 +19,16 @@ if (!defined('ABSPATH')) {
 class AppApi {
 
     const NS = 'ccsp/v1';
+    const SCENARIO_META = 'ccsp_scenario_status';
 
     public function routes() {
         $auth = [$this, 'can_use'];
 
         register_rest_route(self::NS, '/me', [
             'methods' => 'GET', 'callback' => [$this, 'me'], 'permission_callback' => $auth,
+        ]);
+        register_rest_route(self::NS, '/onboarding/seen', [
+            'methods' => 'POST', 'callback' => [$this, 'tour_seen'], 'permission_callback' => $auth,
         ]);
         register_rest_route(self::NS, '/estimates', [
             'methods' => 'GET', 'callback' => [$this, 'list_estimates'], 'permission_callback' => $auth,
@@ -40,6 +45,33 @@ class AppApi {
         register_rest_route(self::NS, '/calc/centres', [
             'methods' => 'GET', 'callback' => [$this, 'calc_centres'], 'permission_callback' => $auth,
         ]);
+
+        // Feedback: any portal user can submit and see their own; admins see + manage all.
+        register_rest_route(self::NS, '/feedback', [
+            'methods' => 'GET', 'callback' => [$this, 'list_feedback'], 'permission_callback' => $auth,
+        ]);
+        register_rest_route(self::NS, '/feedback', [
+            'methods' => 'POST', 'callback' => [$this, 'submit_feedback'], 'permission_callback' => $auth,
+        ]);
+        register_rest_route(self::NS, '/feedback/(?P<id>\d+)', [
+            'methods' => 'POST', 'callback' => [$this, 'update_feedback'], 'permission_callback' => $auth,
+        ]);
+
+        // Per-user testing-scenario progress (works / issue), stored in user meta.
+        register_rest_route(self::NS, '/testing/status', [
+            'methods' => 'GET', 'callback' => [$this, 'get_scenario_status'], 'permission_callback' => $auth,
+        ]);
+        register_rest_route(self::NS, '/testing/status', [
+            'methods' => 'POST', 'callback' => [$this, 'set_scenario_status'], 'permission_callback' => $auth,
+        ]);
+        // Admin-only: every portal user's testing progress.
+        register_rest_route(self::NS, '/admin/testing', [
+            'methods' => 'GET', 'callback' => [$this, 'all_scenario_status'], 'permission_callback' => [$this, 'can_admin'],
+        ]);
+    }
+
+    public function can_admin() {
+        return is_user_logged_in() && $this->is_super();
     }
 
     /** Accessible centres with fees + promotions for the in-app calculator. */
@@ -70,29 +102,50 @@ class AppApi {
         $app_id  = (int) get_option('ccsp_app_page_id');
         $app_url = $app_id ? get_permalink($app_id) : home_url('/');
         $user = wp_get_current_user();
+        $caps = [
+            'manage_fees'       => current_user_can('ccsp_manage_fees'),
+            'manage_promotions' => current_user_can('ccsp_manage_promotions'),
+            'manage_centres'    => current_user_can('ccsp_manage_centres'),
+            'manage_portal'     => $this->is_super(),
+        ];
+        if ($this->is_super()) { $role_label = 'Portal admin'; }
+        elseif ($caps['manage_fees'] || $caps['manage_promotions']) { $role_label = 'Area manager'; }
+        else { $role_label = 'Centre manager'; }
         return new WP_REST_Response([
             'name'          => $user->display_name,
             'email'         => $user->user_email,
             'is_super'      => $this->is_super(),
+            'caps'          => $caps,
+            'role_label'    => $role_label,
             'centres'       => $centres,
             'calculator_url'=> $page_id ? get_permalink($page_id) : '',
             'logout_url'    => wp_logout_url($app_url),
             'profile_url'   => admin_url('profile.php'),
             'statuses'      => ['new' => 'New', 'contacted' => 'Contacted', 'enrolled' => 'Enrolled', 'lost' => 'Lost'],
+            // True only once the user has explicitly opted out; otherwise the
+            // welcome tour opens automatically on every login.
+            'tour_seen'     => (bool) get_user_meta($user->ID, 'ccsp_tour_optout', true),
         ], 200);
     }
 
-    /** WHERE clause fragment scoping calculations to the caller. Returns '' for all. */
+    /** Remember that this user opted out of the welcome tour opening on login. */
+    public function tour_seen() {
+        update_user_meta(get_current_user_id(), 'ccsp_tour_optout', 1);
+        return new WP_REST_Response(['ok' => true], 200);
+    }
+
+    /**
+     * WHERE clause fragment scoping saved estimates to the caller.
+     * Super admins / portal managers see every lead ('' = no restriction).
+     * A centre manager only ever sees the leads they personally saved, so
+     * managers sharing a centre never see each other's leads.
+     */
     private function scope_sql() {
-        $ids = Repo::user_centre_ids();
-        if ($ids === null) {
+        global $wpdb;
+        if ($this->is_super()) {
             return '';
         }
-        if (empty($ids)) {
-            return ' AND 0=1';
-        }
-        $in = implode(',', array_map('intval', $ids));
-        return " AND c.centre_id IN ($in)";
+        return $wpdb->prepare(' AND c.manager_id = %d', get_current_user_id());
     }
 
     public function list_estimates(WP_REST_Request $req) {
@@ -178,6 +231,7 @@ class AppApi {
             return new WP_Error('ccsp_bad_status', 'Invalid status.', ['status' => 400]);
         }
         $wpdb->update(Install::table('calculations'), ['status' => $status], ['id' => $id]);
+        Audit::log('estimate', $id, 'status', ['status' => $row->status], ['status' => $status]);
         return new WP_REST_Response(['ok' => true, 'status' => $status], 200);
     }
 
@@ -216,8 +270,159 @@ class AppApi {
             'conversion'       => $conversion,
             'weekly_fees'      => round($weekly_fee_sum, 2),
             'annual_fees'      => round($weekly_fee_sum * 52, 2),
-            'promotions_used'  => array_map(function ($p) { return ['name' => $p->name ?: '—', 'count' => (int) $p->n]; }, $promo),
+            'promotions_used'  => array_map(function ($p) { return ['name' => $p->name ?: '-', 'count' => (int) $p->n]; }, $promo),
         ], 200);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  Feedback
+     * ------------------------------------------------------------------ */
+
+    private function feedback_categories() {
+        return ['bug' => 'Bug', 'calculation' => 'Incorrect calculation', 'validation' => 'Validation issue', 'ui' => 'UI / UX', 'suggestion' => 'Suggestion', 'other' => 'Other'];
+    }
+    private function feedback_severities() {
+        return ['critical' => 'Critical', 'high' => 'High', 'medium' => 'Medium', 'low' => 'Low'];
+    }
+    private function feedback_statuses() {
+        return ['new' => 'New', 'reviewing' => 'Reviewing', 'resolved' => 'Resolved', 'wontfix' => 'Won\'t fix'];
+    }
+
+    /** Human role label for a user id (for grouping feedback by who sent it). */
+    private function user_role_label($uid) {
+        $u = get_userdata($uid);
+        if (!$u) { return 'Unknown'; }
+        if (user_can($u, 'manage_options') || user_can($u, 'ccsp_manage_portal')) { return 'Portal admin'; }
+        if (user_can($u, 'ccsp_manage_fees') || user_can($u, 'ccsp_manage_promotions')) { return 'Area manager'; }
+        if (user_can($u, 'ccsp_use_portal')) { return 'Centre manager'; }
+        return 'Other';
+    }
+
+    private function feedback_row($r) {
+        return [
+            'id'         => (int) $r->id,
+            'user_id'    => (int) $r->user_id,
+            'user_name'  => $r->user_name,
+            'user_role'  => $this->user_role_label((int) $r->user_id),
+            'scenario'   => $r->scenario,
+            'category'   => $r->category,
+            'severity'   => $r->severity,
+            'subject'    => $r->subject,
+            'message'    => $r->message,
+            'status'     => $r->status,
+            'admin_note' => $r->admin_note,
+            'created_at' => $r->created_at,
+            'updated_at' => $r->updated_at,
+        ];
+    }
+
+    public function list_feedback() {
+        global $wpdb;
+        $t = Install::table('feedback');
+        if ($this->is_super()) {
+            $rows = $wpdb->get_results("SELECT * FROM $t ORDER BY id DESC LIMIT 500");
+        } else {
+            $rows = $wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE user_id = %d ORDER BY id DESC LIMIT 200", get_current_user_id()));
+        }
+        return new WP_REST_Response([
+            'feedback'   => array_map([$this, 'feedback_row'], $rows ?: []),
+            'is_super'   => $this->is_super(),
+            'categories' => $this->feedback_categories(),
+            'severities' => $this->feedback_severities(),
+            'statuses'   => $this->feedback_statuses(),
+        ], 200);
+    }
+
+    public function submit_feedback(WP_REST_Request $req) {
+        global $wpdb;
+        $subject = sanitize_text_field($req->get_param('subject'));
+        $message = sanitize_textarea_field($req->get_param('message'));
+        if ($subject === '' || $message === '') {
+            return new WP_Error('ccsp_feedback', 'Please add a subject and a description.', ['status' => 400]);
+        }
+        $cats = $this->feedback_categories();
+        $sevs = $this->feedback_severities();
+        $category = sanitize_key($req->get_param('category'));
+        $severity = sanitize_key($req->get_param('severity'));
+        $user = wp_get_current_user();
+        $now = current_time('mysql');
+        $wpdb->insert(Install::table('feedback'), [
+            'user_id'    => get_current_user_id(),
+            'user_name'  => $user->display_name,
+            'scenario'   => sanitize_text_field($req->get_param('scenario')),
+            'category'   => isset($cats[$category]) ? $category : 'other',
+            'severity'   => isset($sevs[$severity]) ? $severity : 'medium',
+            'subject'    => $subject,
+            'message'    => $message,
+            'status'     => 'new',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        Audit::log('feedback', (int) $wpdb->insert_id, 'submit', null, ['subject' => $subject, 'severity' => isset($sevs[$severity]) ? $severity : 'medium']);
+        return new WP_REST_Response(array_merge(['ok' => true, 'id' => (int) $wpdb->insert_id], (array) $this->list_feedback()->get_data()), 200);
+    }
+
+    public function update_feedback(WP_REST_Request $req) {
+        global $wpdb;
+        if (!$this->is_super()) {
+            return new WP_Error('ccsp_forbidden', 'Only administrators can update feedback.', ['status' => 403]);
+        }
+        $id = (int) $req['id'];
+        $t = Install::table('feedback');
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id FROM $t WHERE id = %d", $id));
+        if (!$row) { return new WP_Error('ccsp_not_found', 'Feedback not found.', ['status' => 404]); }
+        $statuses = $this->feedback_statuses();
+        $status = sanitize_key($req->get_param('status'));
+        $data = ['updated_at' => current_time('mysql')];
+        if (isset($statuses[$status])) { $data['status'] = $status; }
+        if ($req->get_param('admin_note') !== null) { $data['admin_note'] = sanitize_textarea_field($req->get_param('admin_note')); }
+        $wpdb->update($t, $data, ['id' => $id]);
+        Audit::log('feedback', $id, 'review', null, ['status' => isset($data['status']) ? $data['status'] : '']);
+        return new WP_REST_Response(array_merge(['ok' => true], (array) $this->list_feedback()->get_data()), 200);
+    }
+
+    /* ------------------------------------------------------------------ *
+     *  Testing-scenario progress (per user)
+     * ------------------------------------------------------------------ */
+
+    public function get_scenario_status() {
+        $map = get_user_meta(get_current_user_id(), self::SCENARIO_META, true);
+        return new WP_REST_Response(['status' => is_array($map) && $map ? $map : (object) []], 200);
+    }
+
+    /** Admin view: every portal user with their scenario status map. */
+    public function all_scenario_status() {
+        $out = [];
+        foreach (get_users(['orderby' => 'display_name', 'number' => 1000]) as $u) {
+            if (!user_can($u, 'ccsp_use_portal')) { continue; }
+            $map = get_user_meta($u->ID, self::SCENARIO_META, true);
+            if (!is_array($map)) { $map = []; }
+            $out[] = [
+                'id'     => (int) $u->ID,
+                'name'   => $u->display_name,
+                'role'   => $this->user_role_label($u->ID),
+                'status' => $map ? $map : (object) [],
+            ];
+        }
+        return new WP_REST_Response(['users' => $out], 200);
+    }
+
+    public function set_scenario_status(WP_REST_Request $req) {
+        $id = sanitize_key((string) $req->get_param('id'));
+        if ($id === '') {
+            return new WP_Error('ccsp_bad', 'Missing scenario id.', ['status' => 400]);
+        }
+        $status = sanitize_key((string) $req->get_param('status'));
+        if (!in_array($status, ['pass', 'issue', ''], true)) { $status = ''; }
+        $uid = get_current_user_id();
+        $map = get_user_meta($uid, self::SCENARIO_META, true);
+        if (!is_array($map)) { $map = []; }
+        if ($status === '') { unset($map[$id]); } else { $map[$id] = $status; }
+        update_user_meta($uid, self::SCENARIO_META, $map);
+        // Record the mark so admins can track testing progress in the Activity log.
+        $label = sanitize_text_field((string) $req->get_param('label'));
+        Audit::log('scenario', 0, $status === '' ? 'clear' : $status, null, ['scenario' => $label ?: $id]);
+        return new WP_REST_Response(['ok' => true, 'status' => $map ? $map : (object) []], 200);
     }
 
     /* -------- helpers -------- */

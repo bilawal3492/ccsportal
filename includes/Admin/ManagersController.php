@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Managers screen — assign WordPress users to the Centre Manager role and
+ * Managers screen, assign WordPress users to the Centre Manager role and
  * scope them to one or more centres. Scoping is stored in user meta and
  * enforced server-side wherever centre data is read.
  */
@@ -74,7 +74,7 @@ class ManagersController {
                             <strong>Centres</strong>
                             <div class="ccsp-scroll">
                             <?php foreach (Repo::centres() as $c) : ?>
-                                <label class="ccsp-check"><input type="checkbox" name="centres[]" value="<?php echo (int) $c->id; ?>"> <?php echo esc_html($c->brand_name . ' — ' . $c->name); ?></label>
+                                <label class="ccsp-check"><input type="checkbox" name="centres[]" value="<?php echo (int) $c->id; ?>"> <?php echo esc_html($c->brand_name . ' · ' . $c->name); ?></label>
                             <?php endforeach; ?>
                             </div>
                             <p class="ccsp-hint">For an existing manager, ticking centres replaces their current assignment.</p>
@@ -114,7 +114,7 @@ class ManagersController {
     /** Users available to assign (exclude existing managers from the "add" picker). */
     private function user_options($managers) {
         $existing = array_map(static function ($u) { return (int) $u->ID; }, $managers);
-        $out = [0 => '— Select a user —'];
+        $out = [0 => 'Select a user…'];
         foreach (Repo::assignable_users() as $u) {
             if (in_array((int) $u->ID, $existing, true)) {
                 continue;

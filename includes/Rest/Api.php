@@ -3,6 +3,7 @@ namespace CCSPortal\Rest;
 
 use CCSPortal\Install;
 use CCSPortal\Data\Repo;
+use CCSPortal\Admin\Audit;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -142,7 +143,7 @@ class Api {
             'withholding'  => (float) $tf['withholding'],
         ];
 
-        // Promotion pricing — applied to the parent GAP, after subsidy.
+        // Promotion pricing, applied to the parent GAP, after subsidy.
         $promo = $this->price_promotion(
             (int) $req->get_param('promotion_id'),
             $centre_id,
@@ -283,7 +284,7 @@ class Api {
     /**
      * Build the comparison + best-value data. Each pricing structure is
      * evaluated INDEPENDENTLY:
-     *   - by_days:  attendance packages (2/3/4/5) — always the standard/package
+     *   - by_days:  attendance packages (2/3/4/5), always the standard/package
      *               day-rates, never affected by the selected fee basis.
      *   - by_basis: standard daily vs weekly vs WindBack, each on its own rate.
      *   - by_promo: every offer on the currently-selected basis.
@@ -294,9 +295,9 @@ class Api {
             return ['by_days' => [], 'by_basis' => [], 'by_promo' => [], 'best' => null];
         }
 
-        // Attendance packages — ALWAYS standard/package pricing (independent of basis).
+        // Attendance packages, ALWAYS standard/package pricing (independent of basis).
         $by_days = [];
-        foreach ([2, 3, 4, 5] as $d) {
+        foreach ([1, 2, 3, 4, 5] as $d) {
             $cp = array_map(function ($c) use ($d) {
                 $c['days_week1'] = $d; $c['days_week2'] = $d; $c['fee_override'] = '';
                 return $c;
@@ -305,8 +306,10 @@ class Api {
             $by_days[] = ['days' => $d, 'weekly_fee' => $s['weekly_fee'], 'weekly_gap' => $s['weekly_gap']];
         }
 
-        // Grid: each fee basis × each promotion (incl. none) at the actual attendance.
-        $bases = ['standard' => 'Standard daily', 'weekly' => 'Weekly rate', 'windback' => 'WindBack rate'];
+        // Grid: fee basis × each promotion (incl. none) at the actual attendance.
+        // Only the day-tier ("standard") basis is offered; weekly/WindBack pricing
+        // was retired, so those bases are no longer computed or compared.
+        $bases = ['standard' => 'Standard daily'];
         $promo_list = Repo::promotions_for_centre($centre_id);
         $grid = [];
         foreach ($bases as $b => $bl) {
@@ -411,7 +414,7 @@ class Api {
                 $ongoing = true;
                 $weekly_saving = $weekly_gap / self::FREE_WEEK_INTERVAL;
                 $total_value = $value * $weekly_gap;
-                $desc = $n . ' weeks free — 1 free week every ' . self::FREE_WEEK_INTERVAL
+                $desc = $n . ' weeks free, 1 free week every ' . self::FREE_WEEK_INTERVAL
                     . ' weeks (' . self::money($weekly_saving) . '/wk effective, ' . self::money($total_value) . ' total value)';
                 break;
             case 'percent':
@@ -432,7 +435,7 @@ class Api {
                 $desc = $n . '% off each additional child\'s daily fee (applied before CCS).';
                 break;
             case 'oneoff':
-                // One-off credit (e.g. refer a friend) — subtracted once from the total.
+                // One-off credit (e.g. refer a friend), subtracted once from the total.
                 $oneoff = $value;
                 $total_value = $value;
                 $desc = self::money($value) . ' one-off credit.';
@@ -460,24 +463,42 @@ class Api {
         if (!$centre_id || !Repo::can_access_centre($centre_id)) {
             return new WP_Error('ccsp_forbidden_centre', 'You do not have access to that centre.', ['status' => 403]);
         }
-        $inputs  = $req->get_param('inputs');
-        $results = $req->get_param('results');
-
-        $wpdb->insert(Install::table('calculations'), [
+        $t = Install::table('calculations');
+        $data = [
             'centre_id'    => $centre_id,
-            'manager_id'   => get_current_user_id(),
             'parent_name'  => sanitize_text_field($req->get_param('parent_name')),
             'parent_email' => sanitize_email($req->get_param('parent_email')),
             'parent_phone' => sanitize_text_field($req->get_param('parent_phone')),
             'income'       => (float) $req->get_param('income'),
             'ccs_pct'      => (float) $req->get_param('ccs_pct'),
             'promotion_id' => (int) $req->get_param('promotion_id'),
-            'inputs_json'  => wp_json_encode($inputs),
-            'results_json' => wp_json_encode($results),
-            'status'       => 'new',
-            'created_at'   => current_time('mysql'),
-        ]);
+            'inputs_json'  => wp_json_encode($req->get_param('inputs')),
+            'results_json' => wp_json_encode($req->get_param('results')),
+        ];
 
-        return new WP_REST_Response(['ok' => true, 'id' => (int) $wpdb->insert_id], 201);
+        // Editing an existing estimate: update in place, keeping its status,
+        // owner and created date. Only the owner (or a portal admin) may edit.
+        $id = (int) $req->get_param('id');
+        if ($id) {
+            $row = $wpdb->get_row($wpdb->prepare("SELECT manager_id FROM $t WHERE id = %d", $id));
+            if (!$row) {
+                return new WP_Error('ccsp_not_found', 'Estimate not found.', ['status' => 404]);
+            }
+            $is_super = current_user_can('ccsp_manage_portal') || current_user_can('manage_options');
+            if (!$is_super && (int) $row->manager_id !== get_current_user_id()) {
+                return new WP_Error('ccsp_forbidden', 'You can only edit your own saved estimates.', ['status' => 403]);
+            }
+            $wpdb->update($t, $data, ['id' => $id]);
+            Audit::log('estimate', $id, 'update', null, ['name' => $data['parent_name']]);
+            return new WP_REST_Response(['ok' => true, 'id' => $id, 'updated' => true], 200);
+        }
+
+        $data['manager_id'] = get_current_user_id();
+        $data['status']     = 'new';
+        $data['created_at'] = current_time('mysql');
+        $wpdb->insert($t, $data);
+        $new_id = (int) $wpdb->insert_id;
+        Audit::log('estimate', $new_id, 'create', null, ['name' => $data['parent_name']]);
+        return new WP_REST_Response(['ok' => true, 'id' => $new_id], 201);
     }
 }

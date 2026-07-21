@@ -1,6 +1,7 @@
 <?php
 namespace CCSPortal\Rest;
 
+use CCSPortal\Admin\Audit;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -10,7 +11,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Custom authentication for the standalone React admin — so staff never touch
+ * Custom authentication for the standalone React admin, so staff never touch
  * wp-login or wp-admin. Login sets the normal WordPress auth cookie (same
  * session mechanism), gated by the portal capability. Account changes
  * (name / email / password) and logout all happen in-app.
@@ -74,6 +75,7 @@ class Auth {
         wp_set_current_user($user->ID);
         wp_set_auth_cookie($user->ID, true, is_ssl());
 
+        Audit::log('session', $user->ID, 'login', null, null);
         return new WP_REST_Response(['ok' => true], 200);
     }
 
@@ -91,7 +93,9 @@ class Auth {
             $data['display_name'] = $name;
         }
 
-        $email = sanitize_email($req->get_param('email'));
+        // Cast: the password form posts no email field, and sanitize_email(null)
+        // is deprecated on PHP 8.1+.
+        $email = sanitize_email((string) $req->get_param('email'));
         if ($email !== '' && $email !== $user->user_email) {
             if (!is_email($email)) {
                 return new WP_Error('ccsp_email', 'Please enter a valid email.', ['status' => 400]);
@@ -124,7 +128,13 @@ class Auth {
             return new WP_Error('ccsp_account', $res->get_error_message(), ['status' => 400]);
         }
 
-        // Changing the password rotates session tokens — keep this session alive.
+        $changed = [];
+        if (isset($data['display_name'])) { $changed[] = 'name'; }
+        if (isset($data['user_email']))   { $changed[] = 'email'; }
+        if (isset($data['user_pass']))    { $changed[] = 'password'; }
+        Audit::log('account', $user->ID, 'update', null, ['changed' => $changed]);
+
+        // Changing the password rotates session tokens, keep this session alive.
         if (isset($data['user_pass'])) {
             wp_set_auth_cookie($user->ID, true, is_ssl());
         }

@@ -1,4 +1,4 @@
-/* Centre CCS Portal — admin styles */
+/* Centre CCS Portal, admin styles */
 .ccsp-wrap { max-width: 1080px; }
 .ccsp-title { display: flex; align-items: baseline; gap: 10px; }
 .ccsp-ver { font-size: 12px; font-weight: 600; color: #6a7078; background: #eef0f4; padding: 2px 8px; border-radius: 20px; }

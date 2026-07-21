@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Centre CCS Portal
- * Description: Internal CCS administration portal for Centre Managers — centre fees, subsidy estimates, promotions, and branded estimates across all centres. Reuses the CCS engine from The Child Care Subsidy Calculator (single source of truth, no duplicated logic).
- * Version: 0.10.0
+ * Description: Internal CCS administration portal for Centre Managers, centre fees, subsidy estimates, promotions, and branded estimates across all centres. Reuses the CCS engine from The Child Care Subsidy Calculator (single source of truth, no duplicated logic).
+ * Version: 0.16.4
  * Author: i9 Education
  * Author URI: https://i9.edu.au/
  * License: GPLv2 or later
@@ -25,17 +25,17 @@ if (version_compare(PHP_VERSION, '7.4', '<')) {
 }
 
 // Paths & version.
-if (!defined('CCSP_VERSION'))  define('CCSP_VERSION', '0.10.0');
+if (!defined('CCSP_VERSION'))  define('CCSP_VERSION', '0.16.4');
 if (!defined('CCSP_DIR'))      define('CCSP_DIR', plugin_dir_path(__FILE__));
 if (!defined('CCSP_URL'))      define('CCSP_URL', plugin_dir_url(__FILE__));
-if (!defined('CCSP_DB_VERSION')) define('CCSP_DB_VERSION', '5');
+if (!defined('CCSP_DB_VERSION')) define('CCSP_DB_VERSION', '8');
 
 // Fully-qualified name of the shared CCS engine provided by the calculator plugin.
 if (!defined('CCSP_ENGINE_CLASS')) {
     define('CCSP_ENGINE_CLASS', 'CCSCalculator\\Includes\\Calculator\\CCSEngine');
 }
 
-// Manual requires (mirrors the calculator plugin's style — no autoloader).
+// Manual requires (mirrors the calculator plugin's style, no autoloader).
 require_once CCSP_DIR . 'includes/Install.php';
 require_once CCSP_DIR . 'includes/Data/Repo.php';
 require_once CCSP_DIR . 'includes/Admin/UI.php';
@@ -73,7 +73,7 @@ add_action('admin_notices', function () {
     }
     if (!class_exists(CCSP_ENGINE_CLASS)) {
         echo '<div class="notice notice-warning"><p><strong>Centre CCS Portal:</strong> the CCS calculation engine was not found. '
-            . 'Please make sure <em>The Child Care Subsidy Calculator</em> plugin is installed and active — the portal reuses its engine so the subsidy maths stays identical everywhere.</p></div>';
+            . 'Please make sure <em>The Child Care Subsidy Calculator</em> plugin is installed and active, the portal reuses its engine so the subsidy maths stays identical everywhere.</p></div>';
     }
 });
 

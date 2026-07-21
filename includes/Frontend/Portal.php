@@ -130,7 +130,7 @@ class Portal {
                 <section class="ccsp-panel">
                     <h3 class="ccsp-panel-h">Subsidy details</h3>
                     <label class="fld">Do you know your CCS %?
-                        <select id="knows_ccs"><option value="0">No — estimate from income</option><option value="1">Yes — I know it</option></select>
+                        <select id="knows_ccs"><option value="0">No, estimate from income</option><option value="1">Yes, I know it</option></select>
                     </label>
                     <label class="fld" id="income_wrap">Combined family income (annual)
                         <input type="number" id="income" min="0" step="1000" placeholder="$">

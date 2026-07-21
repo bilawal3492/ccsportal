@@ -37,16 +37,26 @@ class CentresController {
 
     private function render_list() {
         $rows = Repo::centres();
+        // Scope to the manager's own centres, matching what the REST layer
+        // enforces via Repo::can_access_centre(). Filtered here rather than
+        // through Repo::accessible_centres() so that admins (ids === null)
+        // keep seeing inactive centres, which the Status column reports on.
+        $ids = Repo::user_centre_ids();
+        if ($ids !== null) {
+            $rows = array_values(array_filter($rows, function ($c) use ($ids) {
+                return in_array((int) $c->id, $ids, true);
+            }));
+        }
         $can_edit = current_user_can(self::CAP_EDIT);
         ?>
         <div class="wrap ccsp-wrap">
             <h1 class="ccsp-title">Centres &amp; Fees</h1>
             <?php UI::notice(); ?>
-            <p class="ccsp-sub">Each centre's current daily, weekly and WindBack rates plus the day-attendance discount tiers.</p>
+            <p class="ccsp-sub">Each centre's daily fee for 1 to 5 attendance days per week.</p>
             <table class="widefat striped ccsp-table">
                 <thead><tr>
                     <th>Brand</th><th>Code</th><th>Centre</th>
-                    <th class="num">Full daily</th><th class="num">Weekly (day)</th><th class="num">WindBack</th>
+                    <th class="num">Full daily</th>
                     <th>Status</th><th></th>
                 </tr></thead>
                 <tbody>
@@ -56,9 +66,7 @@ class CentresController {
                         <td><span class="ccsp-dot" style="background:<?php echo esc_attr($c->accent_color); ?>"></span><?php echo esc_html($c->brand_name); ?></td>
                         <td><code><?php echo esc_html($c->code); ?></code></td>
                         <td><?php echo esc_html($c->name); ?></td>
-                        <td class="num"><?php echo $s ? '$' . number_format((float) $s->full_daily_fee, 2) : '—'; ?></td>
-                        <td class="num"><?php echo $s ? '$' . number_format((float) $s->weekly_rate, 2) : '—'; ?></td>
-                        <td class="num"><?php echo $s ? '$' . number_format((float) $s->windback_rate, 2) : '—'; ?></td>
+                        <td class="num"><?php echo $s ? '$' . number_format((float) $s->full_daily_fee, 2) : '-'; ?></td>
                         <td><span class="ccsp-badge <?php echo $c->status === 'active' ? 'ok' : 'bad'; ?>"><?php echo esc_html(ucfirst($c->status)); ?></span></td>
                         <td><?php if ($can_edit) : ?><a class="button button-small" href="<?php echo esc_url(UI::url(self::PAGE, ['action' => 'edit', 'id' => $c->id])); ?>">Edit</a><?php endif; ?></td>
                     </tr>
@@ -117,8 +125,6 @@ class CentresController {
                     <h2>Current fee schedule</h2>
                     <div class="ccsp-grid2">
                         <label>Effective from<input type="date" name="effective_from" value="<?php echo $val($s ? $s->effective_from : gmdate('Y-m-d')); ?>"></label>
-                        <label>Weekly fee ($)<input type="number" step="0.01" min="0" name="weekly_rate" value="<?php echo $val($s ? $s->weekly_rate : ''); ?>"></label>
-                        <label>WindBack fee ($)<input type="number" step="0.01" min="0" name="windback_rate" value="<?php echo $val($s ? $s->windback_rate : ''); ?>"></label>
                     </div>
                 </div>
 

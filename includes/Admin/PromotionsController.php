@@ -98,7 +98,7 @@ class PromotionsController {
                 <div class="ccsp-card">
                     <h2>Offer</h2>
                     <div class="ccsp-grid2">
-                        <label class="wide">Name<input type="text" name="name" required value="<?php echo $val($p->name ?? ''); ?>" placeholder="e.g. 4 Weeks Free — Winter"></label>
+                        <label class="wide">Name<input type="text" name="name" required value="<?php echo $val($p->name ?? ''); ?>" placeholder="e.g. 4 Weeks Free, Winter"></label>
                         <label>Type<?php echo UI::select('type', Repo::promo_types(), $p->type ?? 'weeks_free'); ?></label>
                         <label>Value<input type="number" step="0.01" min="0" name="value" value="<?php echo $val($p->value ?? ''); ?>"></label>
                         <label>How it applies<?php echo UI::select('unit', ['weeks' => 'Weeks free (1 free / 5 weeks)', 'percent' => '% off parent gap', 'amount' => '$ off weekly gap', 'sibling' => 'Sibling discount (% off 2nd+ child fee)', 'oneoff' => 'One-off credit ($)'], $p->unit ?? 'weeks'); ?></label>
@@ -107,7 +107,7 @@ class PromotionsController {
                         <label>End date<input type="date" name="end_date" value="<?php echo $val($p->end_date ?? ''); ?>"></label>
                         <label class="ccsp-check"><input type="checkbox" name="stackable" value="1" <?php checked(!empty($p->stackable)); ?>> Can combine with other promotions</label>
                         <label class="wide">Eligibility notes (internal)<textarea name="eligibility" rows="2" placeholder="Short internal note on who qualifies…"><?php echo esc_textarea($p->eligibility ?? ''); ?></textarea></label>
-                        <label class="wide">Terms &amp; conditions (shown to the family on the estimate)<textarea name="terms" rows="8" placeholder="Full T&amp;Cs — e.g. eligibility, free-week schedule (5th/10th/15th/20th week), direct debit, consecutive weeks…"><?php echo esc_textarea($p->terms ?? ''); ?></textarea></label>
+                        <label class="wide">Terms &amp; conditions (shown to the family on the estimate)<textarea name="terms" rows="8" placeholder="Full T&amp;Cs, e.g. eligibility, free-week schedule (5th/10th/15th/20th week), direct debit, consecutive weeks…"><?php echo esc_textarea($p->terms ?? ''); ?></textarea></label>
                     </div>
                 </div>
 
@@ -125,7 +125,7 @@ class PromotionsController {
                             <strong>Centres</strong>
                             <div class="ccsp-scroll">
                             <?php foreach (Repo::centres() as $c) : ?>
-                                <label class="ccsp-check"><input type="checkbox" name="centres[]" value="<?php echo (int) $c->id; ?>" <?php checked(in_array((int) $c->id, $sel_centres, true)); ?>> <?php echo esc_html($c->brand_name . ' — ' . $c->name); ?></label>
+                                <label class="ccsp-check"><input type="checkbox" name="centres[]" value="<?php echo (int) $c->id; ?>" <?php checked(in_array((int) $c->id, $sel_centres, true)); ?>> <?php echo esc_html($c->brand_name . ' · ' . $c->name); ?></label>
                             <?php endforeach; ?>
                             </div>
                         </div>

@@ -23,30 +23,48 @@ class AdminApi {
     const NS = 'ccsp/v1';
 
     public function routes() {
-        $cap = [$this, 'can_manage'];
+        $view   = [$this, 'can_view'];    // any portal user (read-only lists)
+        $fees   = [$this, 'can_fees'];    // area managers + admins
+        $promos = [$this, 'can_promos'];  // area managers + admins
+        $admin  = [$this, 'can_manage'];  // portal admins / WP admins only
 
-        register_rest_route(self::NS, '/admin/bootstrap', ['methods' => 'GET', 'callback' => [$this, 'bootstrap'], 'permission_callback' => $cap]);
+        register_rest_route(self::NS, '/admin/bootstrap', ['methods' => 'GET', 'callback' => [$this, 'bootstrap'], 'permission_callback' => $view]);
 
-        register_rest_route(self::NS, '/admin/brands', ['methods' => 'GET', 'callback' => [$this, 'list_brands'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/brands', ['methods' => 'POST', 'callback' => [$this, 'save_brand'], 'permission_callback' => $cap]);
+        register_rest_route(self::NS, '/admin/brands', ['methods' => 'GET', 'callback' => [$this, 'list_brands'], 'permission_callback' => $admin]);
+        register_rest_route(self::NS, '/admin/brands', ['methods' => 'POST', 'callback' => [$this, 'save_brand'], 'permission_callback' => $admin]);
 
-        register_rest_route(self::NS, '/admin/centres', ['methods' => 'GET', 'callback' => [$this, 'list_centres'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/centres/(?P<id>\d+)', ['methods' => 'GET', 'callback' => [$this, 'get_centre'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/centres', ['methods' => 'POST', 'callback' => [$this, 'save_centre'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/centres/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'delete_centre'], 'permission_callback' => $cap]);
+        register_rest_route(self::NS, '/admin/centres', ['methods' => 'GET', 'callback' => [$this, 'list_centres'], 'permission_callback' => $view]);
+        register_rest_route(self::NS, '/admin/centres/(?P<id>\d+)', ['methods' => 'GET', 'callback' => [$this, 'get_centre'], 'permission_callback' => $view]);
+        register_rest_route(self::NS, '/admin/centres', ['methods' => 'POST', 'callback' => [$this, 'save_centre'], 'permission_callback' => $fees]);
+        register_rest_route(self::NS, '/admin/centres/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'delete_centre'], 'permission_callback' => $admin]);
 
-        register_rest_route(self::NS, '/admin/promotions', ['methods' => 'GET', 'callback' => [$this, 'list_promotions'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/promotions', ['methods' => 'POST', 'callback' => [$this, 'save_promotion'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/promotions/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'delete_promotion'], 'permission_callback' => $cap]);
+        register_rest_route(self::NS, '/admin/promotions', ['methods' => 'GET', 'callback' => [$this, 'list_promotions'], 'permission_callback' => $view]);
+        register_rest_route(self::NS, '/admin/promotions', ['methods' => 'POST', 'callback' => [$this, 'save_promotion'], 'permission_callback' => $promos]);
+        register_rest_route(self::NS, '/admin/promotions/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'delete_promotion'], 'permission_callback' => $promos]);
 
-        register_rest_route(self::NS, '/admin/users', ['methods' => 'GET', 'callback' => [$this, 'list_users'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/users/create', ['methods' => 'POST', 'callback' => [$this, 'create_user'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/managers', ['methods' => 'POST', 'callback' => [$this, 'save_manager'], 'permission_callback' => $cap]);
-        register_rest_route(self::NS, '/admin/managers/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'remove_manager'], 'permission_callback' => $cap]);
+        register_rest_route(self::NS, '/admin/audit', ['methods' => 'GET', 'callback' => [$this, 'list_audit'], 'permission_callback' => $admin]);
+
+        register_rest_route(self::NS, '/admin/users', ['methods' => 'GET', 'callback' => [$this, 'list_users'], 'permission_callback' => $admin]);
+        register_rest_route(self::NS, '/admin/users/create', ['methods' => 'POST', 'callback' => [$this, 'create_user'], 'permission_callback' => $admin]);
+        register_rest_route(self::NS, '/admin/managers', ['methods' => 'POST', 'callback' => [$this, 'save_manager'], 'permission_callback' => $admin]);
+        register_rest_route(self::NS, '/admin/managers/(?P<id>\d+)/password', ['methods' => 'POST', 'callback' => [$this, 'set_manager_password'], 'permission_callback' => $admin]);
+        register_rest_route(self::NS, '/admin/managers/(?P<id>\d+)', ['methods' => 'DELETE', 'callback' => [$this, 'remove_manager'], 'permission_callback' => $admin]);
     }
 
+    public function can_view() {
+        return is_user_logged_in() && current_user_can('ccsp_use_portal');
+    }
+    public function can_fees() {
+        return is_user_logged_in() && (current_user_can('ccsp_manage_fees') || current_user_can('manage_options'));
+    }
+    public function can_promos() {
+        return is_user_logged_in() && (current_user_can('ccsp_manage_promotions') || current_user_can('manage_options'));
+    }
     public function can_manage() {
         return is_user_logged_in() && (current_user_can('ccsp_manage_portal') || current_user_can('manage_options'));
+    }
+    private function is_super() {
+        return current_user_can('ccsp_manage_portal') || current_user_can('manage_options');
     }
 
     /* ------------------------------------------------------------------ *
@@ -115,13 +133,26 @@ class AdminApi {
      * ------------------------------------------------------------------ */
 
     private function centres_payload() {
+        // Non-admins (area / centre managers) only see their assigned centres.
+        $scope = Repo::user_centre_ids(); // null = all (admin)
         $out = [];
         foreach (Repo::centres() as $c) {
+            if ($scope !== null && !in_array((int) $c->id, $scope, true)) { continue; }
             $s = Repo::current_schedule($c->id);
+            $full = $s ? (float) $s->full_daily_fee : 0;
+            $rate = [];
+            if ($s) { foreach (Repo::tiers($s->id) as $t) { $rate[(int) $t->days] = (float) $t->daily_rate; } }
             $out[] = [
                 'id' => (int) $c->id, 'brand_id' => (int) $c->brand_id, 'brand_name' => $c->brand_name,
                 'accent' => $c->accent_color, 'code' => $c->code, 'name' => $c->name, 'status' => $c->status,
-                'full_daily_fee' => $s ? (float) $s->full_daily_fee : 0,
+                'full_daily_fee' => $full,
+                'day_fees'       => [
+                    '1' => $rate[1] ?? $full,
+                    '2' => $rate[2] ?? $full,
+                    '3' => $rate[3] ?? $full,
+                    '4' => $rate[4] ?? $full,
+                    '5' => $rate[5] ?? $full,
+                ],
                 'weekly_rate'    => $s ? (float) $s->weekly_rate : 0,
                 'windback_rate'  => $s ? (float) $s->windback_rate : 0,
             ];
@@ -135,6 +166,9 @@ class AdminApi {
 
     public function get_centre(WP_REST_Request $req) {
         $id = (int) $req['id'];
+        if (!Repo::can_access_centre($id)) {
+            return new WP_Error('ccsp_forbidden', 'You do not have access to that centre.', ['status' => 403]);
+        }
         $c = Repo::centre($id);
         if (!$c) { return new WP_Error('ccsp_not_found', 'Centre not found.', ['status' => 404]); }
         $s = Repo::current_schedule($id);
@@ -162,6 +196,15 @@ class AdminApi {
     public function save_centre(WP_REST_Request $req) {
         global $wpdb;
         $id = (int) $req->get_param('id');
+
+        // Creating a brand-new centre is a portal-admin action; area managers may
+        // only edit centres already assigned to them.
+        if (!$id && !$this->is_super()) {
+            return new WP_Error('ccsp_forbidden', 'Only a portal administrator can add a new centre.', ['status' => 403]);
+        }
+        if ($id && !Repo::can_access_centre($id)) {
+            return new WP_Error('ccsp_forbidden', 'You can only edit centres assigned to you.', ['status' => 403]);
+        }
 
         $centre = [
             'brand_id'      => (int) $req->get_param('brand_id'),
@@ -310,38 +353,149 @@ class AdminApi {
     }
 
     /* ------------------------------------------------------------------ *
+     *  Activity log (audit)
+     * ------------------------------------------------------------------ */
+
+    public function list_audit(WP_REST_Request $req) {
+        $res = Audit::query([
+            'entity'  => sanitize_key((string) $req->get_param('entity')),
+            'action'  => sanitize_key((string) $req->get_param('action')),
+            'user_id' => (int) $req->get_param('user_id'),
+            'search'  => sanitize_text_field((string) $req->get_param('search')),
+            'limit'   => (int) $req->get_param('limit') ?: 200,
+            'offset'  => (int) $req->get_param('offset') ?: 0,
+        ]);
+        $logs = [];
+        foreach ($res['rows'] as $r) {
+            $logs[] = [
+                'id'        => (int) $r->id,
+                'when'      => $r->created_at,
+                'user'      => $r->display_name ?: ('#' . $r->user_id),
+                'user_id'   => (int) $r->user_id,
+                'entity'    => $r->entity,
+                'entity_id' => (int) $r->entity_id,
+                'action'    => $r->action,
+                'detail'    => Audit::summary($r),
+            ];
+        }
+        return new WP_REST_Response([
+            'logs'     => $logs,
+            'total'    => $res['total'],
+            'entities' => Audit::distinct('entity'),
+            'actions'  => Audit::distinct('action'),
+            'actors'   => array_map(function ($a) {
+                return ['id' => (int) $a->user_id, 'name' => $a->display_name ?: ('#' . $a->user_id)];
+            }, Audit::actors()),
+        ], 200);
+    }
+
+    /* ------------------------------------------------------------------ *
      *  Users / managers
      * ------------------------------------------------------------------ */
 
+    /**
+     * Classify a WordPress user for the portal Users screen:
+     *   'wpadmin' - a full WordPress administrator (managed in wp-admin, locked here)
+     *   'admin'   - a Portal Administrator (our ccsp_portal_admin role): full portal access
+     *   'area'    - an Area Manager: edits fees + promotions for their assigned centres
+     *   'manager' - a Centre Manager scoped to one or more centres (view-only admin areas)
+     *   'other'   - any other user, not yet given portal access (assignable)
+     */
+    private function user_kind($user) {
+        if (user_can($user, 'manage_options')) {
+            return 'wpadmin';
+        }
+        if (in_array(Install::ROLE_ADMIN, (array) $user->roles, true) || user_can($user, 'ccsp_manage_portal')) {
+            return 'admin';
+        }
+        if (in_array(Install::ROLE_AREA, (array) $user->roles, true) || user_can($user, 'ccsp_manage_fees') || user_can($user, 'ccsp_manage_promotions')) {
+            return 'area';
+        }
+        if (in_array(Install::ROLE_MANAGER, (array) $user->roles, true)) {
+            return 'manager';
+        }
+        return 'other';
+    }
+
+    private static function role_label($role) {
+        $map = ['admin' => 'Portal Admin', 'area' => 'Area Manager', 'manager' => 'Centre Manager'];
+        return $map[$role] ?? 'Centre Manager';
+    }
+
     private function users_payload() {
-        $managers = [];
-        foreach (Repo::managers() as $u) {
-            $managers[] = [
-                'id' => (int) $u->ID, 'name' => $u->display_name, 'email' => $u->user_email,
-                'centre_ids' => Repo::manager_centre_ids($u->ID),
+        $order = ['admin' => 0, 'area' => 1, 'manager' => 2];
+        $users = [];
+        $assignable = [];
+        foreach (get_users(['orderby' => 'display_name', 'number' => 1000]) as $u) {
+            $kind = $this->user_kind($u);
+            if ($kind === 'other') {
+                $assignable[] = ['id' => (int) $u->ID, 'name' => $u->display_name, 'email' => $u->user_email];
+                continue;
+            }
+            $role = ($kind === 'wpadmin') ? 'admin' : $kind;
+            $users[] = [
+                'id'         => (int) $u->ID,
+                'name'       => $u->display_name,
+                'email'      => $u->user_email,
+                'role'       => $role,
+                'role_label' => self::role_label($role),
+                'centre_ids' => in_array($role, ['manager', 'area'], true) ? Repo::manager_centre_ids($u->ID) : [],
+                'locked'     => $kind === 'wpadmin',
+                'is_self'    => (int) $u->ID === get_current_user_id(),
             ];
         }
-        $assignable = [];
-        foreach (Repo::assignable_users() as $u) {
-            $assignable[] = ['id' => (int) $u->ID, 'name' => $u->display_name, 'email' => $u->user_email];
-        }
-        return ['managers' => $managers, 'assignable' => $assignable];
+        usort($users, function ($a, $b) use ($order) {
+            if ($a['role'] !== $b['role']) { return ($order[$a['role']] ?? 9) - ($order[$b['role']] ?? 9); }
+            return strcasecmp($a['name'], $b['name']);
+        });
+        return ['users' => $users, 'assignable' => $assignable, 'roles' => [
+            ['id' => 'admin', 'label' => 'Portal Administrator', 'hint' => 'Full access to every centre, lead and setting.'],
+            ['id' => 'area', 'label' => 'Area Manager', 'hint' => 'Edit fees and promotions for their assigned centres.'],
+            ['id' => 'manager', 'label' => 'Centre Manager', 'hint' => 'View-only fees and promotions; sees only their own leads and centres.'],
+        ]];
     }
 
     public function list_users() {
         $p = $this->users_payload();
         $p['centres'] = $this->centres_payload();
+        $p['brands']  = $this->brands_payload();
         return new WP_REST_Response($p, 200);
+    }
+
+    /** Apply the chosen portal role + centre scope to a user (never touches WP admin role). */
+    private function apply_portal_role($user, $role, $centre_ids) {
+        $all = [Install::ROLE_ADMIN, Install::ROLE_AREA, Install::ROLE_MANAGER];
+        $want = $role === 'admin' ? Install::ROLE_ADMIN : ($role === 'area' ? Install::ROLE_AREA : Install::ROLE_MANAGER);
+        if (!in_array($want, (array) $user->roles, true)) {
+            $user->add_role($want);
+        }
+        foreach ($all as $r) {
+            if ($r !== $want && in_array($r, (array) $user->roles, true)) { $user->remove_role($r); }
+        }
+        // Portal admins have no centre scope; area & centre managers are scoped.
+        if ($role === 'admin') {
+            delete_user_meta($user->ID, Repo::MANAGER_META);
+            return [];
+        }
+        $centres = array_values(array_unique(array_filter(array_map('intval', (array) $centre_ids))));
+        update_user_meta($user->ID, Repo::MANAGER_META, $centres);
+        return $centres;
+    }
+
+    private function role_param(WP_REST_Request $req) {
+        $r = $req->get_param('role');
+        return in_array($r, ['admin', 'area', 'manager'], true) ? $r : 'manager';
     }
 
     public function create_user(WP_REST_Request $req) {
         $email = sanitize_email($req->get_param('email'));
         $name  = sanitize_text_field($req->get_param('name'));
+        $role  = $this->role_param($req);
         if (!is_email($email)) {
             return new WP_Error('ccsp_bad_email', 'A valid email is required.', ['status' => 400]);
         }
         if (email_exists($email)) {
-            return new WP_Error('ccsp_email_exists', 'A user with that email already exists — assign them below instead.', ['status' => 409]);
+            return new WP_Error('ccsp_email_exists', 'A user with that email already exists, add them from the Existing user tab instead.', ['status' => 409]);
         }
         $username = sanitize_user(current(explode('@', $email)), true);
         if (username_exists($username)) { $username .= '_' . wp_generate_password(4, false); }
@@ -352,18 +506,19 @@ class AdminApi {
             'display_name' => $name ?: $username,
             'first_name'   => $name,
             'user_pass'    => wp_generate_password(20),
-            'role'         => Install::ROLE_MANAGER,
+            'role'         => $role === 'admin' ? Install::ROLE_ADMIN : Install::ROLE_MANAGER,
         ]);
         if (is_wp_error($user_id)) {
             return new WP_Error('ccsp_user_failed', $user_id->get_error_message(), ['status' => 400]);
         }
 
-        $centres = array_values(array_unique(array_filter(array_map('intval', (array) $req->get_param('centre_ids')))));
-        update_user_meta($user_id, Repo::MANAGER_META, $centres);
-        // Send the set-password / welcome email.
+        $user = get_userdata($user_id);
+        $centres = $this->apply_portal_role($user, $role, $req->get_param('centre_ids'));
+        // Send the set-password / welcome email (a fallback; admins can also set a
+        // password directly from the Users screen if email delivery is unreliable).
         wp_new_user_notification($user_id, null, 'user');
 
-        Audit::log('manager', $user_id, 'create', null, ['email' => $email, 'centres' => $centres]);
+        Audit::log('manager', $user_id, 'create', null, ['email' => $email, 'role' => $role, 'centres' => $centres]);
         return new WP_REST_Response(array_merge(['ok' => true, 'id' => $user_id], $this->users_payload()), 200);
     }
 
@@ -371,23 +526,61 @@ class AdminApi {
         $user_id = (int) $req->get_param('user_id');
         $user = $user_id ? get_userdata($user_id) : null;
         if (!$user) { return new WP_Error('ccsp_no_user', 'User not found.', ['status' => 404]); }
-        if (!in_array(Install::ROLE_MANAGER, (array) $user->roles, true)) {
-            $user->add_role(Install::ROLE_MANAGER);
+        if (user_can($user, 'manage_options')) {
+            return new WP_Error('ccsp_forbidden', 'This is a WordPress administrator; manage their role in WordPress admin.', ['status' => 403]);
         }
-        $centres = array_values(array_unique(array_filter(array_map('intval', (array) $req->get_param('centre_ids')))));
-        update_user_meta($user_id, Repo::MANAGER_META, $centres);
-        Audit::log('manager', $user_id, 'assign', null, ['centres' => $centres]);
+        $role = $this->role_param($req);
+        $centres = $this->apply_portal_role($user, $role, $req->get_param('centre_ids'));
+        Audit::log('manager', $user_id, 'assign', null, ['role' => $role, 'centres' => $centres]);
+        return new WP_REST_Response(array_merge(['ok' => true], $this->users_payload()), 200);
+    }
+
+    /**
+     * Set (or reset) a portal user's password directly, so a new manager or
+     * portal admin can sign in immediately without depending on WordPress email
+     * delivery. Blocked for full WordPress administrators, whose credentials are
+     * managed in wp-admin.
+     */
+    public function set_manager_password(WP_REST_Request $req) {
+        $user_id = (int) $req['id'];
+        $user = get_userdata($user_id);
+        if (!$user) {
+            return new WP_Error('ccsp_no_user', 'User not found.', ['status' => 404]);
+        }
+        if (user_can($user, 'manage_options')) {
+            return new WP_Error('ccsp_forbidden', 'WordPress administrators are managed in WordPress admin.', ['status' => 403]);
+        }
+        $roles = (array) $user->roles;
+        if (!array_intersect([Install::ROLE_MANAGER, Install::ROLE_AREA, Install::ROLE_ADMIN], $roles)) {
+            return new WP_Error('ccsp_forbidden', 'Passwords can only be set for portal users.', ['status' => 403]);
+        }
+
+        $password = (string) $req->get_param('password');
+        if (strlen($password) < 8) {
+            return new WP_Error('ccsp_weak_password', 'Password must be at least 8 characters.', ['status' => 400]);
+        }
+
+        wp_set_password($password, $user_id);
+        // Never record the password itself in the audit trail.
+        Audit::log('manager', $user_id, 'set_password', null, null);
+
         return new WP_REST_Response(array_merge(['ok' => true], $this->users_payload()), 200);
     }
 
     public function remove_manager(WP_REST_Request $req) {
         $user_id = (int) $req['id'];
         $user = get_userdata($user_id);
-        if ($user) {
-            $user->remove_role(Install::ROLE_MANAGER);
-            delete_user_meta($user_id, Repo::MANAGER_META);
-            Audit::log('manager', $user_id, 'remove', null, null);
+        if (!$user) {
+            return new WP_REST_Response(array_merge(['ok' => true], $this->users_payload()), 200);
         }
+        if (user_can($user, 'manage_options')) {
+            return new WP_Error('ccsp_forbidden', 'This is a WordPress administrator; manage their role in WordPress admin.', ['status' => 403]);
+        }
+        $user->remove_role(Install::ROLE_MANAGER);
+        $user->remove_role(Install::ROLE_AREA);
+        $user->remove_role(Install::ROLE_ADMIN);
+        delete_user_meta($user_id, Repo::MANAGER_META);
+        Audit::log('manager', $user_id, 'remove', null, null);
         return new WP_REST_Response(array_merge(['ok' => true], $this->users_payload()), 200);
     }
 
