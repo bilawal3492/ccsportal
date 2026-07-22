@@ -440,7 +440,7 @@ class Install {
             ]);
             $schedule_id = (int) $wpdb->insert_id;
 
-            // Exact daily rate per attendance-day count (1–5 days).
+            // Exact daily rate per attendance-day count (1-5 days).
             $day_rates = [
                 1 => $full,
                 2 => $full,

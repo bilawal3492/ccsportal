@@ -107,7 +107,7 @@
 		$('sum_fee').textContent = money(d.totals_period.fee);
 		$('sum_sub').textContent = '−' + money(d.totals_period.subsidy);
 		$('sum_net').textContent = money(d.net_period_gap);
-		$('sum_pct').textContent = (d.ccs.higher_pct > d.ccs.standard_pct ? d.ccs.standard_pct + '–' + d.ccs.higher_pct : d.ccs.standard_pct) + '%';
+		$('sum_pct').textContent = (d.ccs.higher_pct > d.ccs.standard_pct ? d.ccs.standard_pct + '-' + d.ccs.higher_pct : d.ccs.standard_pct) + '%';
 		$('sum_hours').textContent = d.ccs.hours_per_fortnight;
 		if ($('knows_ccs').value === '1') { $('higher_display').value = d.ccs.higher_pct; }
 

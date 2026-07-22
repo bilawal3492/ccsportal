@@ -1,19 +1,19 @@
-# Centre CCS Portal — Deployment Guide
+# Centre CCS Portal: Deployment Guide
 
 ## Where to host: a WordPress server (PHP + MySQL). NOT AWS Amplify.
 
 This system is **WordPress**. Two PHP plugins run inside a WordPress install:
 
-- **The Child Care Subsidy Calculator** — owns the CCS calculation engine
+- **The Child Care Subsidy Calculator**: owns the CCS calculation engine
   (`CCSCalculator\Includes\Calculator\CCSEngine`) and the policy rates.
-- **Centre CCS Portal** — depends on that engine; creates MySQL tables
+- **Centre CCS Portal**: depends on that engine; creates MySQL tables
   (`wp_ccsp_*`), WordPress roles, the REST API (`/wp-json/ccsp/v1/…`), and the
   front-end pages. Its React app is vendored (no build step) and served by
   WordPress, using WordPress login cookies + REST nonces (same-origin).
 
 Because of this, the front-end and back-end must live on the **same WordPress
 install on ccs.i9.edu.au**. AWS Amplify Hosting only runs static sites / JS SPAs
-+ serverless — it cannot run WordPress, PHP, or MySQL. Do not use Amplify.
++ serverless, so it cannot run WordPress, PHP, or MySQL. Do not use Amplify.
 
 ### Hosting options (pick one)
 - The **same host as i9.edu.au** (if WordPress): add the `ccs.i9.edu.au`
@@ -30,11 +30,11 @@ install on ccs.i9.edu.au**. AWS Amplify Hosting only runs static sites / JS SPAs
 2. Install WordPress.
 3. WordPress → Settings → Permalinks → **Post name** (pretty permalinks).
 4. Plugins → Add New → Upload, then **activate both**:
-   1. The Child Care Subsidy Calculator (engine) — first.
-   2. Centre CCS Portal — second.
+   1. The Child Care Subsidy Calculator (engine), first.
+   2. Centre CCS Portal, second.
 5. On activation the portal auto-creates tables, roles, seed data, and pages:
-   - `/centre-ccs-portal-app` — the SaaS app (staff URL)
-   - `/centre-ccs-portal` — the calculator
+   - `/centre-ccs-portal-app`: the SaaS app (staff URL)
+   - `/centre-ccs-portal`: the calculator
 6. CCS Calculator → Settings: set current income thresholds + hourly caps
    (2025-26 / 2026-27 legislated figures). The engine is exact; these values
    keep it compliant.

@@ -40,6 +40,7 @@
 		else if (n === 'testing') { inner = html`<${F}><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/><//>`; }
 		else if (n === 'feedback') { inner = html`<${F}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/><//>`; }
 		else if (n === 'log') { inner = html`<${F}><path d="M4 4h13l3 3v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><line x1="7" y1="9" x2="16" y2="9"/><line x1="7" y1="13" x2="16" y2="13"/><line x1="7" y1="17" x2="12" y2="17"/><//>`; }
+		else if (n === 'menu') { inner = html`<${F}><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/><//>`; }
 		else if (n === 'settings') { inner = html`<${F}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/><//>`; }
 		return html`<svg width=${p.size || 18} height=${p.size || 18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">${inner}</svg>`;
 	}
@@ -100,25 +101,71 @@
 	}
 
 	/* ---------------- Dashboard ---------------- */
+	function Donut(p) {
+		var segs = p.segments, size = p.size || 168, sw = p.stroke || 22;
+		var r = (size - sw) / 2, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r;
+		var total = segs.reduce(function (s, x) { return s + x.value; }, 0);
+		var off = 0;
+		return html`<svg width=${size} height=${size} viewBox=${'0 0 ' + size + ' ' + size} class="donut">
+			<circle cx=${cx} cy=${cy} r=${r} fill="none" stroke="var(--sunken)" strokeWidth=${sw} />
+			${total > 0 ? segs.filter(function (s) { return s.value > 0; }).map(function (s, i) {
+				var dash = s.value / total * C;
+				var el = html`<circle key=${i} cx=${cx} cy=${cy} r=${r} fill="none" stroke=${s.color} strokeWidth=${sw}
+					strokeDasharray=${dash + ' ' + (C - dash)} strokeDashoffset=${-off} transform=${'rotate(-90 ' + cx + ' ' + cy + ')'} />`;
+				off += dash; return el;
+			}) : null}
+			<text x=${cx} y=${cy - 2} textAnchor="middle" class="donut-n">${p.center}</text>
+			<text x=${cx} y=${cy + 16} textAnchor="middle" class="donut-l">${p.centerSub}</text>
+		</svg>`;
+	}
 	function Dashboard(props) {
 		var s = useState(null), data = s[0], setData = s[1];
 		useEffect(function () { api('reports/summary').then(function (r) { setData(r.body); }); }, []);
 		if (!data) { return html`<${Loader} label="Loading dashboard…" />`; }
 		var c = data.counts || {};
+		var STLABEL = { new: 'New', contacted: 'Contacted', enrolled: 'Enrolled', lost: 'Lost' };
+		var STVAR = { new: 'var(--new)', contacted: 'var(--contacted)', enrolled: 'var(--enrolled)', lost: 'var(--lost)' };
+		var segs = ['new', 'contacted', 'enrolled', 'lost'].map(function (k) { return { k: k, label: STLABEL[k], value: c[k] || 0, color: STVAR[k] }; });
+		var trend = data.trend || [];
+		var maxT = Math.max.apply(null, trend.map(function (t) { return t.total; }).concat([1]));
 		return html`<div>
 			<div class="page-head"><h1 class="page-h">Dashboard</h1>
 				${props.onStartTour ? html`<button class="btn sm" onClick=${props.onStartTour}>How it works</button>` : null}</div>
 			<div class="kpi-row">
-				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Estimates</span><span class="kpi-ic ic-blue"><${Icon} name="doc" /></span></div><span class="kpi-n">${data.total}</span></div>
-				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Enrolled</span><span class="kpi-ic ic-green"><${Icon} name="check" /></span></div><span class="kpi-n">${c.enrolled || 0}</span></div>
-				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Conversion</span><span class="kpi-ic ic-amber"><${Icon} name="percent" /></span></div><span class="kpi-n">${data.conversion}%</span></div>
-				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Est. annual fees</span><span class="kpi-ic ic-violet"><${Icon} name="dollar" /></span></div><span class="kpi-n">${money(data.annual_fees)}</span></div>
+				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Estimates</span><span class="kpi-ic ic-blue"><${Icon} name="doc" /></span></div><span class="kpi-n">${data.total}</span><span class="kpi-sub">total leads saved</span></div>
+				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Enrolled</span><span class="kpi-ic ic-green"><${Icon} name="check" /></span></div><span class="kpi-n">${c.enrolled || 0}</span><span class="kpi-sub">${data.total ? Math.round((c.enrolled || 0) / data.total * 100) : 0}% of leads</span></div>
+				<div class="kpi"><div class="kpi-top"><span class="kpi-l">Conversion</span><span class="kpi-ic ic-amber"><${Icon} name="percent" /></span></div><span class="kpi-n">${data.conversion}%</span><span class="kpi-sub">leads → enrolled</span></div>
+				<div class="kpi kpi-accent"><div class="kpi-top"><span class="kpi-l">Enrolled annual fees</span><span class="kpi-ic ic-violet"><${Icon} name="dollar" /></span></div><span class="kpi-n">${money(data.enrolled_annual_fees || 0)}</span><span class="kpi-sub">from ${c.enrolled || 0} enrolled famil${(c.enrolled || 0) === 1 ? 'y' : 'ies'}</span></div>
 			</div>
 			<div class="grid2">
 				<div class="card"><h3>Lead pipeline</h3>
-					${['new', 'contacted', 'enrolled', 'lost'].map(function (k) {
-						return html`<div class="pipe-row" key=${k}><span class=${'dot ' + STC[k]}></span><span class="pipe-lab">${k}</span><span class="pipe-n">${c[k] || 0}</span></div>`;
-					})}
+					<div class="pipe-chart">
+						<${Donut} segments=${segs} center=${data.total} centerSub="leads" />
+						<div class="pipe-legend">${segs.map(function (sg) {
+							var pctv = data.total ? Math.round(sg.value / data.total * 100) : 0;
+							return html`<div class="leg-row" key=${sg.k}><span class="dot" style=${{ background: sg.color }}></span><span class="leg-lab">${sg.label}</span><span class="leg-n">${sg.value}</span><span class="leg-pct">${pctv}%</span></div>`;
+						})}</div>
+					</div>
+				</div>
+				<div class="card"><h3>Leads over time <span class="h3-note">last 6 months</span></h3>
+					${trend.length === 0 ? html`<p class="muted">No data yet.</p>` : html`<${F}>
+						<div class="trend">${trend.map(function (t, i) {
+							return html`<div class="trend-col" key=${i}>
+								<div class="trend-track"><div class="trend-bar" style=${{ height: Math.round(t.total / maxT * 100) + '%' }} title=${t.total + ' leads · ' + t.enrolled + ' enrolled'}>
+									${t.total > 0 && t.enrolled > 0 ? html`<div class="trend-en" style=${{ height: Math.round(t.enrolled / t.total * 100) + '%' }}></div>` : null}
+								</div></div>
+								<span class="trend-v">${t.total}</span><span class="trend-x">${t.label}</span>
+							</div>`;
+						})}</div>
+						<div class="trend-legend"><span class="leg-row"><span class="dot" style=${{ background: 'var(--brand-blue)' }}></span> Leads</span><span class="leg-row"><span class="dot" style=${{ background: 'var(--enrolled)' }}></span> Enrolled</span></div>
+					<//>`}
+				</div>
+			</div>
+			<div class="grid2">
+				<div class="card"><h3>Projected annual fees</h3>
+					<div class="rev-main">${money(data.enrolled_annual_fees || 0)}<span>from enrolled families</span></div>
+					<div class="rev-row"><span>Full pipeline potential</span><b>${money(data.annual_fees || 0)}</b></div>
+					<div class="rev-row"><span>Enrolled weekly fees</span><b>${money(data.enrolled_weekly_fees || 0)}</b></div>
 				</div>
 				<div class="card"><h3>Promotions used</h3>
 					${(data.promotions_used && data.promotions_used.length)
@@ -387,11 +434,11 @@
 			</div>
 			${!canEdit ? html`<p class="muted mini" style=${{ marginTop: '-8px' }}>You have view-only access to centre fees.</p>` : null}
 			<div class="tablewrap"><table class="tbl">
-				<thead><tr>${sortableTh('brand', 'Brand', false)}<th>Code</th>${sortableTh('name', 'Centre', false)}${sortableTh('day1', '1 day', true)}${sortableTh('day2', '2 days', true)}${sortableTh('day3', '3 days', true)}${sortableTh('day4', '4 days', true)}${sortableTh('day5', '5 days', true)}<th>Status</th><th></th></tr></thead>
+				<thead><tr>${sortableTh('brand', 'Brand', false)}${sortableTh('name', 'Centre', false)}<th>Short</th>${sortableTh('day1', '1 day', true)}${sortableTh('day2', '2 days', true)}${sortableTh('day3', '3 days', true)}${sortableTh('day4', '4 days', true)}${sortableTh('day5', '5 days', true)}<th>Status</th><th></th></tr></thead>
 				<tbody>${rows.map(function (c) {
 					return html`<tr key=${c.id}>
 						<td><span class="cdot" style=${{ background: c.accent }}></span>${c.brand_name}</td>
-						<td><code>${c.code}</code></td><td>${c.name}</td>
+						<td>${c.name}</td><td><code>${c.code}</code></td>
 						${[1, 2, 3, 4, 5].map(function (d) { return html`<td class="num" key=${d}>${money(feeOf(c, d))}</td>`; })}
 						<td><span class=${'badge ' + (c.status === 'active' ? 'st-enrolled' : 'st-lost')}>${c.status}</span></td>
 						<td>${canEdit ? html`<button class="btn sm" onClick=${function () { setEditing(c.id); }}>Edit</button>` : null}</td></tr>`;
@@ -1142,24 +1189,24 @@
 	// badge: 'unavailable' = feature not built yet; 'setup' = needs an admin to configure it first.
 	var SCENARIOS = [
 		{ group: 'Family income & subsidy rate', items: [
-			{ id: 'inc-low', t: 'Single child, low family income — expect a high CCS % (up to ~90% at/under the base income threshold).' },
-			{ id: 'inc-med', t: 'Single child, medium family income — subsidy tapers down as income rises.' },
-			{ id: 'inc-high', t: 'Single child, high family income — subsidy reduces toward 0 above the upper income limit.' },
-			{ id: 'inc-taper', t: 'Income exactly on a taper threshold — the rate steps/tapers correctly at the boundary.' },
-			{ id: 'inc-withhold', t: 'Withholding applied — the standard 5% is withheld from the subsidy and reflected in the parent gap.' },
+			{ id: 'inc-low', t: 'Single child, low family income: expect a high CCS % (up to ~90% at/under the base income threshold).' },
+			{ id: 'inc-med', t: 'Single child, medium family income: subsidy tapers down as income rises.' },
+			{ id: 'inc-high', t: 'Single child, high family income: subsidy reduces toward 0 above the upper income limit.' },
+			{ id: 'inc-taper', t: 'Income exactly on a taper threshold: the rate steps/tapers correctly at the boundary.' },
+			{ id: 'inc-withhold', t: 'Withholding applied: the standard 5% is withheld from the subsidy and reflected in the parent gap.' },
 		] },
 		{ group: 'Children & ages', items: [
 			{ id: 'kids-two', t: 'Two children both eligible for CCS.' },
 			{ id: 'kids-three', t: 'Three or more children with different ages.' },
-			{ id: 'kids-higher', t: 'Second/third child higher rate — younger siblings get the multiple-child higher subsidy.' },
+			{ id: 'kids-higher', t: 'Second/third child higher rate: younger siblings get the multiple-child higher subsidy.' },
 			{ id: 'kids-underpre', t: 'Child under preschool age (age is derived from date of birth).' },
 			{ id: 'kids-preschool', t: 'Child attending preschool / kindergarten (no separate preschool session type exists).', badge: 'unavailable' },
-			{ id: 'kids-atsi', t: 'First Nations (ATSI) child — tick the "First Nations (ATSI) child" box; the base subsidised hours apply regardless of activity.' },
+			{ id: 'kids-atsi', t: 'First Nations (ATSI) child: tick the "First Nations (ATSI) child" box; the base subsidised hours apply regardless of activity.' },
 		] },
 		{ group: 'Activity test', items: [
-			{ id: 'act-below', t: 'Low activity — enter a small number of activity hours per fortnight (e.g. 0); the 3-Day Guarantee still applies.' },
-			{ id: 'act-at', t: 'Activity hours exactly at a threshold boundary — type the precise number (e.g. 48) in the Activity hours field.' },
-			{ id: 'act-above', t: 'High activity — enter 48+ activity hours per fortnight to reach the maximum subsidised hours.' },
+			{ id: 'act-below', t: 'Low activity: enter a small number of activity hours per fortnight (e.g. 0); the 3-Day Guarantee still applies.' },
+			{ id: 'act-at', t: 'Activity hours exactly at a threshold boundary: type the precise number (e.g. 48) in the Activity hours field.' },
+			{ id: 'act-above', t: 'High activity: enter 48+ activity hours per fortnight to reach the maximum subsidised hours.' },
 		] },
 		{ group: 'Attendance & sessions', items: [
 			{ id: 'att-days', t: 'Attendance schedules from 1 to 5 days per week (Days wk 1 / Days wk 2).' },
@@ -1168,15 +1215,15 @@
 		] },
 		{ group: 'Fees & centre configuration', items: [
 			{ id: 'fee-rates', t: 'Different daily fees and hourly rates (automatic rate or a custom fee override).' },
-			{ id: 'fee-cap', t: 'Different centre configurations and CCS hourly caps — subsidy is capped at the hourly cap.' },
-			{ id: 'fee-abovecap', t: 'Fee above vs below the hourly cap — the gap widens when the fee exceeds the cap.' },
+			{ id: 'fee-cap', t: 'Different centre configurations and CCS hourly caps: subsidy is capped at the hourly cap.' },
+			{ id: 'fee-abovecap', t: 'Fee above vs below the hourly cap: the gap widens when the fee exceeds the cap.' },
 		] },
 		{ group: 'Promotions', items: [
 			{ id: 'promo-2wk', t: 'Apply a 2 Weeks Free Care promotion.', badge: 'setup' },
 			{ id: 'promo-4wk', t: 'Apply a 4 Weeks Free Care promotion.', badge: 'setup' },
 			{ id: 'promo-windback', t: 'Apply the Windback rate (set the centre’s windback rate; it appears in Compare & choose).', badge: 'setup' },
-			{ id: 'promo-multi', t: 'Multiple promotions enabled/disabled — the best offer is chosen in Compare & choose.', badge: 'setup' },
-			{ id: 'promo-expiry', t: 'Expired vs active promotion — the start/end date range is enforced.', badge: 'setup' },
+			{ id: 'promo-multi', t: 'Multiple promotions enabled/disabled: the best offer is chosen in Compare & choose.', badge: 'setup' },
+			{ id: 'promo-expiry', t: 'Expired vs active promotion: the start/end date range is enforced.', badge: 'setup' },
 		] },
 		{ group: 'Saving & editing', items: [
 			{ id: 'save-reopen', t: 'Save an estimate, reopen it, and confirm every value is unchanged.' },
@@ -1293,7 +1340,7 @@
 		);
 		if (caps.manage_portal) {
 			steps.push(
-				{ icon: 'brands', target: '[data-tour="brands"]', title: 'Brands', body: 'Manage your brands — name, colour and logo — used across the portal and on branded estimates.' },
+				{ icon: 'brands', target: '[data-tour="brands"]', title: 'Brands', body: 'Manage your brands (name, colour and logo) used across the portal and on branded estimates.' },
 				{ icon: 'users', target: '[data-tour="users"]', title: 'Users', body: 'Add portal admins, area managers or centre managers, choose their role, assign centres and set passwords.' }
 			);
 		}
@@ -1377,7 +1424,7 @@
 			setSaving(true); setErr(''); setOk('');
 			api('feedback', { method: 'POST', body: form }).then(function (r) {
 				setSaving(false);
-				if (r.ok && r.body && r.body.ok) { setForm(Object.assign({}, blank, { scenario: '' })); setOk('Thanks — your feedback has been sent.'); setData(r.body); }
+				if (r.ok && r.body && r.body.ok) { setForm(Object.assign({}, blank, { scenario: '' })); setOk('Thanks, your feedback has been sent.'); setData(r.body); }
 				else { setErr((r.body && r.body.message) || 'Could not send feedback.'); }
 			});
 		}
@@ -1504,6 +1551,7 @@
 		var initHash = (window.location.hash || '').replace(/^#/, '');
 		var vs = useState({ name: ['dashboard', 'calculator', 'estimates', 'testing', 'feedback', 'settings'].indexOf(initHash) !== -1 ? initHash : 'dashboard' }), view = vs[0], setView = vs[1];
 		var umS = useState(false), menuOpen = umS[0], setMenuOpen = umS[1];
+		var mmS = useState(false), mobMenu = mmS[0], setMobMenu = mmS[1];
 		var trS = useState(false), tourOpen = trS[0], setTourOpen = trS[1];
 		useEffect(function () {
 			api('me').then(function (r) {
@@ -1585,6 +1633,28 @@
 				<div class="content">${body}</div>
 			</div>
 			${tourOpen ? html`<${PortalTour} caps=${me.caps || {}} onDone=${closeTour} />` : null}
+			<nav class="mobnav">
+				${[{ k: 'dashboard', label: 'Home', icon: 'dashboard' }, { k: 'estimates', label: 'Leads', icon: 'estimates' }, { k: 'calculator', label: 'New', icon: 'plus' }, { k: 'testing', label: 'Testing', icon: 'testing' }].map(function (n) {
+					return html`<button key=${n.k} class=${'mobtab' + (activeKey === n.k ? ' active' : '')} onClick=${function () { setMobMenu(false); setView({ name: n.k }); }}><span class="mobtab-i"><${Icon} name=${n.icon} size=${21} /></span><span class="mobtab-l">${n.label}</span></button>`;
+				})}
+				<button class=${'mobtab' + (mobMenu ? ' active' : '')} onClick=${function () { setMobMenu(!mobMenu); }}><span class="mobtab-i"><${Icon} name="menu" size=${21} /></span><span class="mobtab-l">More</span></button>
+			</nav>
+			${mobMenu ? html`<${F}>
+				<div class="mobsheet-overlay" onClick=${function () { setMobMenu(false); }}></div>
+				<div class="mobsheet">
+					<div class="mobsheet-grip"></div>
+					<div class="mobsheet-user"><span class="uc-avatar">${initials}</span><div><strong>${me.name}</strong><span>${me.role_label || (me.is_super ? 'Portal admin' : 'Manager')}</span></div></div>
+					${groups.map(function (g) {
+						return html`<div class="mobsheet-group" key=${g.title}><span class="mobsheet-title">${g.title}</span>
+							${g.items.map(function (n) { return html`<button key=${n.k} class=${'mobsheet-item' + (activeKey === n.k ? ' active' : '')} onClick=${function () { setMobMenu(false); setView({ name: n.k }); }}><${Icon} name=${n.icon} size=${18} /> ${n.label}</button>`; })}
+						</div>`;
+					})}
+					<div class="mobsheet-group">
+						<button class="mobsheet-item" onClick=${function () { setMobMenu(false); setView({ name: 'settings' }); }}><${Icon} name="settings" size=${18} /> Settings & password</button>
+						<button class="mobsheet-item danger" onClick=${doLogout}><${Icon} name="log" size=${18} /> Log out</button>
+					</div>
+				</div>
+			<//>` : null}
 		</div>`;
 	}
 

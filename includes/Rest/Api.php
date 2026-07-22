@@ -235,7 +235,7 @@ class Api {
         if ($basis === 'weekly')   { return (float) $schedule->weekly_rate; }
         if ($basis === 'windback') { return (float) $schedule->windback_rate; }
         // Standard basis: the exact daily fee for this attendance-day count
-        // (1–5 day fee). Falls back to the full (1-day) fee if not configured.
+        // (1-5 day fee). Falls back to the full (1-day) fee if not configured.
         if ($days >= 1 && isset($tier_rate[$days])) {
             return (float) $tier_rate[$days];
         }

@@ -242,17 +242,31 @@ class AppApi {
         $scope = $this->scope_sql();
 
         $rows = $wpdb->get_results(
-            "SELECT c.status, c.results_json FROM $t c LEFT JOIN $centres ce ON ce.id = c.centre_id
+            "SELECT c.status, c.results_json, c.created_at FROM $t c LEFT JOIN $centres ce ON ce.id = c.centre_id
              WHERE 1=1 $scope"
         );
         $counts = ['new' => 0, 'contacted' => 0, 'enrolled' => 0, 'lost' => 0];
         $total = 0;
         $weekly_fee_sum = 0.0;
+        $enrolled_weekly = 0.0;
+        // Build a 6-month trend skeleton (oldest first).
+        $trend = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $ym = gmdate('Y-m', strtotime("first day of -$i month"));
+            $trend[$ym] = ['label' => gmdate('M', strtotime($ym . '-01')), 'total' => 0, 'enrolled' => 0];
+        }
         foreach ($rows as $r) {
             $total++;
             if (isset($counts[$r->status])) { $counts[$r->status]++; }
             $res = json_decode($r->results_json, true);
-            $weekly_fee_sum += $this->weekly_fee($res);
+            $wf = $this->weekly_fee($res);
+            $weekly_fee_sum += $wf;
+            if ($r->status === 'enrolled') { $enrolled_weekly += $wf; }
+            $ym = substr((string) $r->created_at, 0, 7);
+            if (isset($trend[$ym])) {
+                $trend[$ym]['total']++;
+                if ($r->status === 'enrolled') { $trend[$ym]['enrolled']++; }
+            }
         }
         $conversion = $total > 0 ? round(($counts['enrolled'] / $total) * 100, 1) : 0;
 
@@ -265,12 +279,15 @@ class AppApi {
         );
 
         return new WP_REST_Response([
-            'total'            => $total,
-            'counts'           => $counts,
-            'conversion'       => $conversion,
-            'weekly_fees'      => round($weekly_fee_sum, 2),
-            'annual_fees'      => round($weekly_fee_sum * 52, 2),
-            'promotions_used'  => array_map(function ($p) { return ['name' => $p->name ?: '-', 'count' => (int) $p->n]; }, $promo),
+            'total'                 => $total,
+            'counts'                => $counts,
+            'conversion'            => $conversion,
+            'weekly_fees'           => round($weekly_fee_sum, 2),
+            'annual_fees'           => round($weekly_fee_sum * 52, 2),
+            'enrolled_weekly_fees'  => round($enrolled_weekly, 2),
+            'enrolled_annual_fees'  => round($enrolled_weekly * 52, 2),
+            'trend'                 => array_values($trend),
+            'promotions_used'       => array_map(function ($p) { return ['name' => $p->name ?: '-', 'count' => (int) $p->n]; }, $promo),
         ], 200);
     }
 
