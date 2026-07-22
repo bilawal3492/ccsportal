@@ -228,7 +228,7 @@ class AdminApi {
             Audit::log('centre', $id, 'create', null, $centre);
         }
 
-        // Exact daily rates entered directly per attendance-day count (1–5).
+        // Exact daily rates entered directly per attendance-day count (1-5).
         $day_fees = (array) $req->get_param('day_fees');
         $day = function ($d) use ($day_fees) {
             return round((float) ($day_fees[(string) $d] ?? $day_fees[$d] ?? 0), 2);

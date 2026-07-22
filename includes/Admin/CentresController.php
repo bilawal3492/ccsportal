@@ -170,7 +170,7 @@ class CentresController {
         ];
         $wpdb->update(Install::table('centres'), $centre_data, ['id' => $id]);
 
-        // --- Fee schedule: exact daily rates per attendance-day count (1–5) ---
+        // --- Fee schedule: exact daily rates per attendance-day count (1-5) ---
         $day = function ($d) { return round((float) ($_POST['day_' . $d] ?? 0), 2); };
         $full     = $day(1);
         $weekly   = round((float) ($_POST['weekly_rate'] ?? 0), 2);
